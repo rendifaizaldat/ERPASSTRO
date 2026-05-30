@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/* Tailwind v4 mengelola 'base' secara otomatis. 
-  Kita gunakan selector standar untuk memastikan kompatibilitas 
-  dengan sistem build yang sedang berjalan.
-*/
-
 body {
   background-color: #f1f5f9; /* slate-100 */
   color: #0f172a; /* slate-900 */
@@ -37,29 +32,15 @@ body {
 
 /* Animations */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slide-up {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-/* Utility Classes 
-  Di v4, kita mendefinisikan custom utility agar bisa dipakai 
-  langsung di elemen HTML/TSX 
-*/
 @utility animate-fade {
   animation: fade-in 0.4s ease-out forwards;
 }
