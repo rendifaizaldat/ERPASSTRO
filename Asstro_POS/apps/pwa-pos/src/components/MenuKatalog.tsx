@@ -114,7 +114,7 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
       </div>
 
       {/* Grid Katalog Produk Ramping */}
-      <div className="flex-1 p-4 md:p-5 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 content-start">
+      <div className="flex-1 p-4 md:p-5 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 content-start">
         {displayProducts.length === 0 ? (
           <div className="col-span-full h-40 flex flex-col items-center justify-center text-slate-400">
             <ShoppingBag size={32} className="mb-2 opacity-50" />
