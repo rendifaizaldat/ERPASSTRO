@@ -130,7 +130,7 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
             return (
               <div
                 key={p.sku}
-                className={`bg-white border-2 rounded-2xl p-3 flex flex-col justify-between h-28 transition-all duration-150 shadow-sm relative select-none ${
+                className={`bg-white border-2 rounded-2xl p-4 flex flex-col justify-between h-36 transition-all duration-150 shadow-sm relative select-none ${
                   isAvailable
                     ? "border-slate-200/80 hover:border-slate-400 group"
                     : "border-slate-100 opacity-80"
