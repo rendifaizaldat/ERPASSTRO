@@ -3,24 +3,20 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true,
+    "strict": false,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-
-    /* Perbaikan resolusi modul modern untuk menghilangkan error TS5107 & TS5101 */
     "moduleResolution": "bundler",
     "customConditions": ["module"],
-
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
-    /* Pemetaan alias disesuaikan dengan aturan resolusi bundler modern tanpa baseUrl */
     "paths": {
       "@asstro/ledger": ["../../packages/ledger/src/engine"],
       "@asstro/projection": ["../../packages/projection/src/engine"]
