@@ -10,12 +10,17 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+
+    /* Perbaikan resolusi modul modern untuk menghilangkan error TS5107 & TS5101 */
+    "moduleResolution": "bundler",
+    "customConditions": ["module"],
+
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
+
+    /* Pemetaan alias disesuaikan dengan aturan resolusi bundler modern tanpa baseUrl */
     "paths": {
       "@asstro/ledger": ["../../packages/ledger/src/engine"],
       "@asstro/projection": ["../../packages/projection/src/engine"]
