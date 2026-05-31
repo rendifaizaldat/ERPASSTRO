@@ -155,21 +155,19 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
 
                 {/* BARIS UTAMA: berbeda antara readonly dan non-readonly */}
                 {isReadOnly ? (
-                  /* READONLY: nama | ×qty | harga (tanpa pemisah |) */
+                  /* READONLY: nama & qty di kiri, harga di kanan */
                   <div className="flex justify-between items-center w-full gap-2">
-    <div className="flex items-center gap-1.5 min-w-0">
-      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
-        {item.name}
-      </span>
-      <span className="font-black text-[11px] text-slate-500 shrink-0">
-        ×{item.qty}
-      </span>
-    </div>
-    <span className="text-xs font-black text-slate-900 shrink-0 text-right">
-      Rp {(item.price * item.qty).toLocaleString("id-ID")}
-    </span>
-  </div>
-                    {/* Tidak ada tombol delete/pensil */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
+                        {item.name}
+                      </span>
+                      <span className="font-black text-[11px] text-slate-500 shrink-0">
+                        ×{item.qty}
+                      </span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 shrink-0 text-right">
+                      Rp {(item.price * item.qty).toLocaleString("id-ID")}
+                    </span>
                   </div>
                 ) : (
                   /* NON-READONLY: nama | harga, lalu kontrol qty, delete, pensil */
@@ -273,7 +271,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
         )}
       </div>
 
-      {/* RINGKASAN BIAYA DAN TOMBOL (tetap seperti sebelumnya) */}
+      {/* RINGKASAN BIAYA DAN TOMBOL */}
       <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3 shrink-0 text-xs font-bold uppercase tracking-tight text-slate-600">
         <div className="space-y-1.5">
           <div className="flex justify-between">
