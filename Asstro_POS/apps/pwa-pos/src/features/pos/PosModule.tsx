@@ -523,7 +523,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   return (
     <div className="w-full h-full flex flex-row overflow-hidden bg-[#F8FAFC]">
-      <div className="w-[80%] flex flex-row overflow-hidden shrink-0">
+      <div className="w-[75%] flex flex-row overflow-hidden shrink-0">
         {/* Komponen AlphabetFilter telah dihapus */}
 
         <MenuKatalog
@@ -543,7 +543,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         />
       </div>
 
-      <div className="w-[20%] h-full flex flex-col overflow-hidden shrink-0">
+      <div className="w-[25%] h-full flex flex-col overflow-hidden shrink-0">
         <KeranjangBelanja
           cart={cart}
           setCart={setCart}
