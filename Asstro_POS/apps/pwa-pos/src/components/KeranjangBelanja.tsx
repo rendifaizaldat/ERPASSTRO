@@ -10,6 +10,8 @@ import {
   Move,
   Lock,
   XCircle,
+  Pencil,
+  ChefHat, // icon untuk dapur
 } from "lucide-react";
 
 import { VoidOrderModal } from "./VoidOrderModal";
@@ -64,13 +66,19 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
   onExecuteVoidLedger,
 }) => {
   const [showVoidModal, setShowVoidModal] = useState(false);
+  // State untuk toggle catatan per item (non-readonly)
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
+
+  const toggleNote = (id: string) => {
+    setOpenNotes((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const hasSavedItems = cart.some(
-    (item) => item.status === "READ_ONLY" || item.isSaved === true,
+    (item) => item.status === "READ_ONLY" || item.isSaved === true
   );
 
   const hasNewItems = cart.some(
-    (item) => item.status !== "READ_ONLY" && item.isSaved !== true,
+    (item) => item.status !== "READ_ONLY" && item.isSaved !== true
   );
 
   const currentCustomerName = useMemo(() => {
@@ -82,7 +90,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
     if (!selectedTable) return;
 
     const existingTime = sessionStorage.getItem(
-      `asstro_jam_order_${selectedTable}`,
+      `asstro_jam_order_${selectedTable}`
     );
     if (!existingTime) {
       const now = new Date();
@@ -92,7 +100,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
 
       sessionStorage.setItem(
         `asstro_jam_order_${selectedTable}`,
-        formattedTime,
+        formattedTime
       );
     }
   };
@@ -119,7 +127,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
         </span>
       </div>
 
-      {/* DAFTAR ITEM PESANAN GRANULAR */}
+      {/* DAFTAR ITEM PESANAN */}
       <div className="flex-1 p-3 overflow-y-auto space-y-2 bg-[#F8FAFC]">
         {cart.length === 0 ? (
           <div className="h-full w-full flex flex-col items-center justify-center text-slate-300 italic font-black text-xs uppercase tracking-widest text-center">
@@ -129,6 +137,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
           cart.map((item) => {
             const isReadOnly =
               item.status === "READ_ONLY" || item.isSaved === true;
+            const showNoteInput = openNotes[item.id] || false;
 
             return (
               <div
@@ -139,6 +148,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                     : "bg-white border-slate-200"
                 }`}
               >
+                {/* Baris atas: Nama, Qty, Harga, Hapus */}
                 <div className="flex justify-between items-center gap-2">
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
@@ -157,9 +167,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                       <button
                         type="button"
                         onClick={() =>
-                          setCart((prev) =>
-                            prev.filter((i) => i.id !== item.id),
-                          )
+                          setCart((prev) => prev.filter((i) => i.id !== item.id))
                         }
                         className="text-slate-400 hover:text-red-500 transition-colors p-0.5 cursor-pointer"
                       >
@@ -169,31 +177,42 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                   </div>
                 </div>
 
+                {/* Baris kedua: icon pensil/chef + kontrol qty */}
                 <div className="flex justify-between items-center gap-3 pt-1 border-t border-slate-100">
                   <div className="flex-1 min-w-0">
                     {isReadOnly ? (
-                      item.note ? (
-                        <p className="text-[11px] font-medium text-slate-500 italic wrap-break-word line-clamp-2 leading-tight">
-                          NB: {item.note}
-                        </p>
-                      ) : (
-                        <span className="text-[10px] font-black tracking-wider uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/50">
-                          Pesanan Diproses Dapur
+                      // Item readonly: hanya icon chef (hijau) - tanpa pensil
+                      <div className="flex items-center gap-1.5 text-emerald-600">
+                        <ChefHat size={14} className="text-emerald-600" />
+                        <span className="text-[10px] font-black uppercase tracking-wider">
+                          Dapur
                         </span>
-                      )
+                      </div>
                     ) : (
-                      <input
-                        type="text"
-                        value={item.note || ""}
-                        onChange={(e) =>
-                          handleUpdateRowNote(item.id, e.target.value)
-                        }
-                        placeholder="Isi catatan masakan dapur disini..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-700 focus:outline-none focus:border-slate-900 focus:bg-white"
-                      />
+                      // Item non-readonly: icon pensil untuk toggle catatan
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleNote(item.id)}
+                          className={`p-1 rounded-md transition-all ${
+                            showNoteInput
+                              ? "bg-slate-200 text-slate-900"
+                              : "text-slate-400 hover:text-slate-600"
+                          }`}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        {/* Cuplikan catatan jika ada dan sedang tidak ditampilkan */}
+                        {!showNoteInput && item.note && (
+                          <span className="text-[10px] text-slate-400 italic truncate max-w-[150px]">
+                            {item.note.length > 25 ? item.note.slice(0, 25) + "…" : item.note}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
+                  {/* Kontrol qty hanya untuk non-readonly */}
                   {!isReadOnly && (
                     <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shrink-0">
                       <button
@@ -216,13 +235,34 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Catatan yang muncul di Bawah item (dinamis) */}
+                {isReadOnly && item.note && (
+                  <div className="mt-1 pt-1 border-t border-slate-100">
+                    <p className="text-[11px] font-medium text-slate-500 italic break-words leading-tight">
+                      NB: {item.note}
+                    </p>
+                  </div>
+                )}
+
+                {!isReadOnly && showNoteInput && (
+                  <div className="mt-2 pt-1">
+                    <textarea
+                      value={item.note || ""}
+                      onChange={(e) => handleUpdateRowNote(item.id, e.target.value)}
+                      placeholder="Isi catatan untuk dapur..."
+                      rows={2}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-slate-900"
+                    />
+                  </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
-      {/* RINGKASAN BIAYA FISKAL TRANSAKSI */}
+      {/* RINGKASAN BIAYA */}
       <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3 shrink-0 text-xs font-bold uppercase tracking-tight text-slate-600">
         <div className="space-y-1.5">
           <div className="flex justify-between">
@@ -271,7 +311,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
           </div>
         </div>
 
-        {/* HUB KENDALI OPERASIONAL UTAMA */}
+        {/* TOMBOL - 2 BARIS */}
         <div className="space-y-2 pt-1 border-t border-slate-200">
           {hasNewItems && (
             <button
@@ -284,13 +324,13 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
             </button>
           )}
 
-          {/* HUB TOMBOL MODUL KASIR GRID 2 KOLOM */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          {/* BARIS 1: Bayar (hijau) & Print (biru) */}
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               disabled={!hasSavedItems || isWaiter}
               onClick={handleMainActionButtonClick}
-              className="px-3 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
             >
               Bayar
             </button>
@@ -298,11 +338,14 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
               type="button"
               disabled={!hasSavedItems || isWaiter}
               onClick={handlePrintKitchenOnly}
-              className="px-3 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              className="px-3 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
             >
               <Printer size={13} /> Print
             </button>
+          </div>
 
+          {/* BARIS 2: Split, Move, Void */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               disabled={!hasSavedItems || isWaiter}
@@ -319,13 +362,11 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
             >
               <Move size={13} /> Pindah Meja
             </button>
-
-            {/* BARIS 3: AKTIVASI PEMICU MODAL VOID */}
             <button
               type="button"
               disabled={!hasSavedItems || isWaiter}
               onClick={() => setShowVoidModal(true)}
-              className="px-3 py-2.5 bg-red-50 hover:bg-red-100 disabled:bg-slate-50 disabled:text-slate-300 text-red-600 border border-red-200 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
             >
               <XCircle size={13} /> Void
             </button>
@@ -340,7 +381,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
         activeTableData={{
           label: selectedTable,
           savedItems: cart.filter(
-            (i) => i.status === "READ_ONLY" || i.isSaved === true,
+            (i) => i.status === "READ_ONLY" || i.isSaved === true
           ),
         }}
         onConfirmVoid={async (
@@ -348,7 +389,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
           qtyToVoid,
           voidType,
           managerPin,
-          voidNote,
+          voidNote
         ) => {
           if (onExecuteVoidLedger) {
             await onExecuteVoidLedger(
@@ -356,7 +397,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
               qtyToVoid,
               voidType,
               managerPin,
-              voidNote,
+              voidNote
             );
           }
         }}
