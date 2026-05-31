@@ -82,16 +82,6 @@ export const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
     );
   };
 
-  // Helper untuk render icon berdasarkan nama
-  const renderIcon = (iconName: string, className: string) => {
-    const icons: Record<string, React.ReactElement> = {
-      BadgeCheck: <BadgeCheck size={12} className={className} />,
-      User: <User size={12} className={className} />,
-      Briefcase: <Briefcase size={12} className={className} />,
-    };
-    return icons[iconName] || icons.User;
-  };
-
   const employeeName = currentOperator?.name || "GUEST ACCOUNT";
   const employeeRole = currentOperator?.role || "UNKNOWN";
   const roleInfo = getRoleInfo(employeeRole);
@@ -110,92 +100,52 @@ export const Header = ({ onMenuClick }: { onMenuClick: () => void }) => {
   });
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-40 select-none">
-      <div className="flex items-center gap-4">
-        <div className="bg-orange-600 text-white w-12 h-12 flex items-center justify-center rounded-2xl font-black italic shadow-lg shadow-orange-200">
+    <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-40 select-none">
+      {/* Logo & Nama Aplikasi (diperkecil) */}
+      <div className="flex items-center gap-2">
+        <div className="bg-orange-600 text-white w-7 h-7 flex items-center justify-center rounded-lg font-black italic shadow-md shadow-orange-200 text-sm">
           AS
         </div>
-        <div className="flex flex-col">
-          <h2 className="font-black text-2xl tracking-tighter uppercase leading-none text-slate-900">
+        <div className="flex items-baseline gap-1">
+          <h2 className="font-black text-base tracking-tighter uppercase leading-none text-slate-900">
             Asstro <span className="text-orange-600">POS</span>
           </h2>
-          <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">
-            Enterprise Solution
+          <span className="text-[8px] font-bold text-slate-400 tracking-widest uppercase hidden sm:inline">
+            Enterprise
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        {/* NAMA */}
-        <div className="hidden sm:flex flex-col items-end">
-          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">
-            NAMA
+      {/* Informasi dalam satu baris (tidak wrap) */}
+      <div className="flex items-center gap-2 text-xs font-medium text-slate-700 overflow-x-auto whitespace-nowrap scrollbar-hide">
+        <span className="font-black text-slate-900">{employeeName}</span>
+        <span className="text-slate-300">|</span>
+        <span className="text-slate-700">{roleInfo.label}</span>
+        <span className="text-slate-300">|</span>
+        <div className="flex items-center gap-1">
+          <Clock size={12} className="text-orange-600" />
+          <span className={`font-mono font-black ${shiftDurationMetrics.isOvertime ? "text-red-600" : "text-slate-900"}`}>
+            {shiftDurationMetrics.durationText}
           </span>
-          <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
-            {employeeName}
-          </span>
+          {shiftDurationMetrics.isOvertime && (
+            <span className="text-[9px] font-black text-red-600 bg-red-50 px-1 py-0.5 rounded-md animate-pulse">
+              LEMBUR
+            </span>
+          )}
         </div>
+        <span className="text-slate-300">|</span>
+        <span className="text-slate-700 text-xs">{formattedDate}</span>
+        <span className="text-slate-300">|</span>
+        <span className="font-mono font-black text-orange-600 text-xs">
+          {formattedTime}
+        </span>
 
-        {/* JABATAN */}
-        <div className="hidden sm:flex flex-col items-end border-l border-slate-100 pl-4">
-          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">
-            JABATAN
-          </span>
-          <div
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md ${roleInfo.color} mt-0.5`}
-          >
-            {renderIcon(
-              roleInfo.iconName,
-              `text-${roleInfo.color.split(" ")[1]?.replace("text-", "") || "slate-500"}`,
-            )}
-            <span className="text-xs font-black uppercase tracking-tight">
-              {roleInfo.label}
-            </span>
-          </div>
-        </div>
-
-        {/* TIMER KERJA */}
-        {currentOperator && (
-          <div className="hidden sm:flex flex-col items-end border-l border-slate-100 pl-4">
-            <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">
-              TIMER KERJA
-            </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Clock size={12} className="text-orange-600" />
-              <span
-                className={`text-xs font-black font-mono tracking-wider ${shiftDurationMetrics.isOvertime ? "text-red-600" : "text-slate-900"}`}
-              >
-                {shiftDurationMetrics.durationText}
-              </span>
-              {shiftDurationMetrics.isOvertime && (
-                <span className="text-[9px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md animate-pulse">
-                  LEMBUR
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* JAM & TANGGAL */}
-        <div className="flex flex-col items-end border-l border-slate-100 pl-4">
-          <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase">
-            JAM & TANGGAL
-          </span>
-          <div className="flex flex-col items-end mt-0.5">
-            <span className="text-sm font-black text-orange-600 font-mono tracking-wider">
-              {formattedTime}
-            </span>
-            <span className="text-[9px] font-medium text-slate-500 uppercase tracking-tight">
-              {formattedDate}
-            </span>
-          </div>
-        </div>
-
+        {/* Tombol Menu */}
         <button
           onClick={onMenuClick}
-          className="p-3 bg-slate-900 text-white hover:bg-orange-600 rounded-2xl transition-all shadow-lg active:scale-95 cursor-pointer"
+          className="ml-2 p-1.5 bg-slate-900 text-white hover:bg-orange-600 rounded-lg transition-all shadow-md active:scale-95 cursor-pointer"
         >
-          <Menu size={24} />
+          <Menu size={18} />
         </button>
       </div>
     </header>
