@@ -3,7 +3,6 @@ import { TableGrid } from "./TableGrid";
 import { usePos } from "../../core/PosProvider";
 import { useToast } from "../../components/Toast";
 
-import { AlphabetFilter } from "../../components/AlphabetFilter";
 import { MenuKatalog } from "../../components/MenuKatalog";
 import { KeranjangBelanja } from "../../components/KeranjangBelanja";
 import { BillingModal } from "../../components/BillingModal";
@@ -53,7 +52,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("SEMUA");
-  const [alphabetFilter, setAlphabetFilter] = useState<string | null>(null);
   const [activeTableStatus, setActiveTableStatus] = useState<
     "KOSONG" | "TERISI" | "REQUEST_BAYAR" | "PAID" | "OPENED"
   >("OPENED");
@@ -135,7 +133,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
       const categoryName = parentCat ? parentCat.name : "";
       if (activeCategory !== "SEMUA" && categoryName !== activeCategory)
         return false;
-      if (alphabetFilter && !p.name.startsWith(alphabetFilter)) return false;
       if (
         searchQuery.trim() &&
         !p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -143,7 +140,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         return false;
       return true;
     });
-  }, [dbProducts, dbCategories, activeCategory, alphabetFilter, searchQuery]);
+  }, [dbProducts, dbCategories, activeCategory, searchQuery]);
 
   const handleInterceptSelectTable = (
     tableId: string,
@@ -527,10 +524,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   return (
     <div className="w-full h-full flex flex-row overflow-hidden bg-[#F8FAFC]">
       <div className="w-[80%] flex flex-row overflow-hidden shrink-0">
-        <AlphabetFilter
-          alphabetFilter={alphabetFilter}
-          setAlphabetFilter={setAlphabetFilter}
-        />
+        {/* Komponen AlphabetFilter telah dihapus */}
 
         <MenuKatalog
           searchQuery={searchQuery}
@@ -636,20 +630,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
         isOpen={showSplitModal}
         onClose={() => setShowSplitModal(false)}
         cart={cart}
-        tableLabel={selectedTable}
-        operatorName={operatorObj.name}
-        onConfirmSplit={handleFinalSplitSubmit}
+        selectedTable={selectedTable}
+        onSubmit={handleFinalSplitSubmit}
       />
 
       <MoveOrderModal
         isOpen={showMoveModal}
         onClose={() => setShowMoveModal(false)}
         cart={cart}
-        tableLabel={selectedTable}
-        dbTables={dbTables}
-        operatorName={operatorObj.name}
-        onConfirmMove={handleFinalMoveSubmit}
-      />
-    </div>
-  );
-};
+        tab
