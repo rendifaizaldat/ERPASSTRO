@@ -108,7 +108,7 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
         </div>
       </div>
 
-      {/* Grid katalog dengan gap lebih rapat */}
+      {/* Grid katalog */}
       <div className="flex-1 p-4 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-2.5 content-start">
         {displayProducts.length === 0 ? (
           <div className="col-span-full h-40 flex flex-col items-center justify-center text-slate-400">
@@ -149,39 +149,46 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
                   </span>
                 </div>
 
+                {/* Baris bawah: kontrol + tombol order dengan lebar 50% masing-masing */}
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 shrink-0 w-full relative z-0">
+                  {/* Grup kontrol (- / Qty / +) */}
                   <div
-                    className={`flex items-center border rounded-lg overflow-hidden h-7 shrink-0 shadow-xs ${isAvailable ? "bg-slate-50 border-slate-200" : "bg-slate-100 border-slate-100 opacity-50"}`}
+                    className={`flex-1 flex items-center border rounded-lg overflow-hidden h-9 shadow-xs ${
+                      isAvailable
+                        ? "bg-slate-50 border-slate-200"
+                        : "bg-slate-100 border-slate-100 opacity-50"
+                    }`}
                   >
                     <button
                       type="button"
                       disabled={!isAvailable}
                       onClick={(e) => handleLocalDecrement(p.sku, e)}
-                      className="px-2 h-full hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer flex items-center justify-center disabled:cursor-not-allowed"
+                      className="px-3 h-full hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer flex items-center justify-center disabled:cursor-not-allowed"
                     >
-                      <Minus size={10} />
+                      <Minus size={14} />
                     </button>
-                    <span className="px-1 font-black text-xs min-w-4 text-center text-slate-900">
+                    <span className="flex-1 font-black text-base text-center text-slate-900">
                       {currentLocalQty}
                     </span>
                     <button
                       type="button"
                       disabled={!isAvailable}
                       onClick={(e) => handleLocalIncrement(p.sku, e)}
-                      className="px-2 h-full hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer flex items-center justify-center disabled:cursor-not-allowed"
+                      className="px-3 h-full hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer flex items-center justify-center disabled:cursor-not-allowed"
                     >
-                      <Plus size={10} />
+                      <Plus size={14} />
                     </button>
                   </div>
 
+                  {/* Tombol Order */}
                   <button
                     type="button"
                     onClick={(e) => handlePushToCart(p, e)}
                     disabled={currentLocalQty <= 0 || !isAvailable}
-                    className="flex-1 h-7 flex items-center justify-center gap-1 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all bg-slate-900 text-white hover:bg-orange-600 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+                    className="flex-1 h-9 flex items-center justify-center gap-1 px-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all bg-slate-900 text-white hover:bg-orange-600 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed cursor-pointer shadow-xs"
                     title="Tambahkan ke keranjang"
                   >
-                    <ShoppingBag size={10} className="shrink-0" />
+                    <ShoppingBag size={14} className="shrink-0" />
                     <span>Order</span>
                   </button>
                 </div>
