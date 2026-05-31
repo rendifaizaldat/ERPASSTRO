@@ -250,36 +250,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }
   };
 
-  const handleMainActionButtonClick = async () => {
-    const hasSavedItems = cart.some(
-      (i) => i.status === "READ_ONLY" || i.isSaved === true,
-    );
-
-    if (!hasSavedItems) {
-      if (cart.length === 0) return;
-      if (selectedTable) {
-        const preparedItems = cart.map((item) => ({
-          ...item,
-          status: "READ_ONLY" as const,
-          isSaved: true,
-        }));
-
-        await placeTableOrder(selectedTable, cartGrandTotal, preparedItems);
-      }
-      showToast(
-        `NOTA ORDERAN MEJA ${selectedTable} BERHASIL DIKIRIM KE DAPUR!`,
-        "SUCCESS",
-      );
-      setCart([]);
-      onBack();
-    } else if (selectedTable && selectedTable.startsWith("TA-")) {
-      if (cart.length === 0) return;
-      showToast(`NOTA ORDERAN TAKE AWAY BERHASIL DIKIRIM!`, "SUCCESS");
-      setCart([]);
-      onBack();
-    } else {
-      setShowPaymentModal(true);
-    }
+  // ============================================================
+  // PERBAIKAN UTAMA: Fungsi tombol Bayar hanya membuka billing
+  // ============================================================
+  const handleMainActionButtonClick = () => {
+    // Tombol Bayar akan aktif hanya jika ada savedItems (dari KeranjangBelanja)
+    // Maka langsung buka modal pembayaran untuk semua mode: Dine‑In, Take Away, Split Bill
+    setShowPaymentModal(true);
   };
 
   const handleExecuteReprintWithWatermark = (isWatermarked: boolean) => {
@@ -293,6 +270,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
     setShowPrintModal(false);
   };
 
+  // Tombol ORDER / PESAN: mengirim pesanan baru ke dapur dan mengunci item
   const handlePrintKitchenOnly = async () => {
     const newItems = cart.filter((i) => i.status === "CRUD");
     if (newItems.length === 0) {
@@ -385,7 +363,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
     onBack();
   };
 
-  // CORE LOGIC: Menyusun 10 Parameter Enterprise Audit Trail Penuh Sebelum Di Lempar ke Provider
   const handleFinalCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -398,7 +375,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
         sessionStorage.getItem(`asstro_tamu_meja_${selectedTable}`) ||
         (isTakeAway ? "Takeaway Guest" : "Walk-in Guest");
 
-      // A. Enterprise Payload Assembly
       const enterprisePayload = {
         identity: {
           transaction_id: crypto.randomUUID
@@ -428,14 +404,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
         customer: {
           customer_name: customerNameLocal,
         },
-        // B. Item Assembly
         items: cart.map((item) => {
           const prod = dbProducts.find((p: any) => p.sku === item.sku);
           const cat = dbCategories.find((c: any) => c.id === prod?.categoryId);
 
           const lineSubtotal = item.price * item.qty;
-          const itemTax = lineSubtotal * 0.15; // Pro-rata Tax 15%
-          const itemService = lineSubtotal * 0.05; // Pro-rata Service 5%
+          const itemTax = lineSubtotal * 0.15;
+          const itemService = lineSubtotal * 0.05;
 
           return {
             product_id: prod?.id || `PRD-${item.sku}`,
@@ -484,7 +459,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
         },
       };
 
-      // Tembakkan payload raksasa ini ke Ledger
       await executeSale(enterprisePayload);
 
       if (selectedTable && !isTakeAway) {
@@ -524,8 +498,6 @@ export const PosModule: React.FC<PosModuleProps> = ({
   return (
     <div className="w-full h-full flex flex-row overflow-hidden bg-[#F8FAFC]">
       <div className="w-[75%] flex flex-row overflow-hidden shrink-0">
-        {/* Komponen AlphabetFilter telah dihapus */}
-
         <MenuKatalog
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -634,7 +606,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         onSubmit={handleFinalSplitSubmit}
       />
 
-<MoveOrderModal
+      <MoveOrderModal
         isOpen={showMoveModal}
         onClose={() => setShowMoveModal(false)}
         cart={cart}
