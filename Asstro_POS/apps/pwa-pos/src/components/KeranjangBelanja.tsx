@@ -156,18 +156,19 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                 {/* BARIS UTAMA: berbeda antara readonly dan non-readonly */}
                 {isReadOnly ? (
                   /* READONLY: nama | ×qty | harga (tanpa pemisah |) */
-                  <div className="flex justify-between items-center gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
-                        {item.name}
-                      </span>
-                      <span className="font-black text-[11px] text-slate-500 shrink-0">
-                        ×{item.qty}
-                      </span>
-                      <span className="text-xs font-black text-slate-900 shrink-0 text-right">
-                        Rp {(item.price * item.qty).toLocaleString("id-ID")}
-                      </span>
-                    </div>
+                  <div className="flex justify-between items-center w-full gap-2">
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
+        {item.name}
+      </span>
+      <span className="font-black text-[11px] text-slate-500 shrink-0">
+        ×{item.qty}
+      </span>
+    </div>
+    <span className="text-xs font-black text-slate-900 shrink-0 text-right">
+      Rp {(item.price * item.qty).toLocaleString("id-ID")}
+    </span>
+  </div>
                     {/* Tidak ada tombol delete/pensil */}
                   </div>
                 ) : (
