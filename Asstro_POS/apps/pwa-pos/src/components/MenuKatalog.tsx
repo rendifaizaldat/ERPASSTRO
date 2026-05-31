@@ -71,7 +71,7 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
   const displayProducts = filteredProducts.filter((p) => !p.isArchived);
 
   return (
-    <div className="w-[80%] flex flex-col overflow-hidden bg-[#F8FAFC]">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-[#F8FAFC]">
       {/* Baris tunggal: tombol back, search, kategori */}
       <div className="flex items-center gap-2 p-3 bg-white border-b border-slate-200 shrink-0">
         <button
