@@ -634,8 +634,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
         onSubmit={handleFinalSplitSubmit}
       />
 
-      <MoveOrderModal
+<MoveOrderModal
         isOpen={showMoveModal}
         onClose={() => setShowMoveModal(false)}
         cart={cart}
-        tab
+        tables={dbTables}
+        selectedTable={selectedTable}
+        onSubmit={handleFinalMoveSubmit}
+      />
+    </div>
+  );
+};
