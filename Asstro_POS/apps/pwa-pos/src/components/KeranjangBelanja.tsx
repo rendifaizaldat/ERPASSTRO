@@ -11,7 +11,7 @@ import {
   Lock,
   XCircle,
   Pencil,
-  ChefHat, // icon untuk dapur
+  ChefHat,
 } from "lucide-react";
 
 import { VoidOrderModal } from "./VoidOrderModal";
@@ -66,7 +66,6 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
   onExecuteVoidLedger,
 }) => {
   const [showVoidModal, setShowVoidModal] = useState(false);
-  // State untuk toggle catatan per item (non-readonly)
   const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
 
   const toggleNote = (id: string) => {
@@ -97,7 +96,6 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
       const hours = String(now.getHours()).padStart(2, "0");
       const minutes = String(now.getMinutes()).padStart(2, "0");
       const formattedTime = `${hours}:${minutes} WIB`;
-
       sessionStorage.setItem(
         `asstro_jam_order_${selectedTable}`,
         formattedTime
@@ -142,28 +140,72 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
             return (
               <div
                 key={item.id}
-                className={`p-2.5 border rounded-xl flex flex-col gap-1 transition-all shadow-sm ${
+                className={`relative p-2.5 border rounded-xl flex flex-col gap-1 transition-all shadow-sm ${
                   isReadOnly
                     ? "bg-slate-100/80 border-slate-200/60"
                     : "bg-white border-slate-200"
                 }`}
               >
-                {/* Baris atas: Nama, Qty, Harga, Hapus */}
-                <div className="flex justify-between items-center gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
-                      {item.name}
-                    </span>
-                    <span className="font-black text-[11px] text-slate-400 shrink-0">
-                      x{item.qty}
-                    </span>
+                {/* BADGE CHEF HAT untuk item readonly (melayang di pojok kiri atas) */}
+                {isReadOnly && (
+                  <div className="absolute -top-2 -left-2 z-10 bg-white rounded-full p-1 shadow-md border border-slate-200">
+                    <ChefHat size={14} className="text-emerald-600" />
                   </div>
+                )}
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-black text-slate-900">
-                      Rp {(item.price * item.qty).toLocaleString("id-ID")}
-                    </span>
-                    {!isReadOnly && (
+                {/* BARIS UTAMA: berbeda antara readonly dan non-readonly */}
+                {isReadOnly ? (
+                  /* READONLY: nama | ×qty | harga (tanpa pemisah |) */
+                  <div className="flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
+                        {item.name}
+                      </span>
+                      <span className="font-black text-[11px] text-slate-500 shrink-0">
+                        ×{item.qty}
+                      </span>
+                      <span className="text-xs font-black text-slate-900 shrink-0">
+                        Rp {(item.price * item.qty).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                    {/* Tidak ada tombol delete/pensil */}
+                  </div>
+                ) : (
+                  /* NON-READONLY: nama | harga, lalu kontrol qty, delete, pensil */
+                  <div className="flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="font-black text-xs text-slate-900 uppercase tracking-tight truncate">
+                        {item.name}
+                      </span>
+                      <span className="text-xs font-black text-slate-400 shrink-0">|</span>
+                      <span className="text-xs font-black text-slate-900 shrink-0">
+                        Rp {(item.price * item.qty).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Kontrol Qty */}
+                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateRowQty(item.id, -1)}
+                          className="p-1 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                        >
+                          <Minus size={9} />
+                        </button>
+                        <span className="px-1.5 font-black text-[11px] min-w-4 text-center text-slate-900">
+                          {item.qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateRowQty(item.id, 1)}
+                          className="p-1 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                        >
+                          <Plus size={9} />
+                        </button>
+                      </div>
+
+                      {/* Tombol Delete */}
                       <button
                         type="button"
                         onClick={() =>
@@ -173,70 +215,24 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                       >
                         <Trash2 size={13} />
                       </button>
-                    )}
-                  </div>
-                </div>
 
-                {/* Baris kedua: icon pensil/chef + kontrol qty */}
-                <div className="flex justify-between items-center gap-3 pt-1 border-t border-slate-100">
-                  <div className="flex-1 min-w-0">
-                    {isReadOnly ? (
-                      // Item readonly: hanya icon chef (hijau) - tanpa pensil
-                      <div className="flex items-center gap-1.5 text-emerald-600">
-                        <ChefHat size={14} className="text-emerald-600" />
-                        <span className="text-[10px] font-black uppercase tracking-wider">
-                          Dapur
-                        </span>
-                      </div>
-                    ) : (
-                      // Item non-readonly: icon pensil untuk toggle catatan
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleNote(item.id)}
-                          className={`p-1 rounded-md transition-all ${
-                            showNoteInput
-                              ? "bg-slate-200 text-slate-900"
-                              : "text-slate-400 hover:text-slate-600"
-                          }`}
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        {/* Cuplikan catatan jika ada dan sedang tidak ditampilkan */}
-                        {!showNoteInput && item.note && (
-                          <span className="text-[10px] text-slate-400 italic truncate max-w-[150px]">
-                            {item.note.length > 25 ? item.note.slice(0, 25) + "…" : item.note}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Kontrol qty hanya untuk non-readonly */}
-                  {!isReadOnly && (
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shrink-0">
+                      {/* Tombol Pensil untuk toggle catatan */}
                       <button
                         type="button"
-                        onClick={() => handleUpdateRowQty(item.id, -1)}
-                        className="p-1 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                        onClick={() => toggleNote(item.id)}
+                        className={`p-1 rounded-md transition-all ${
+                          showNoteInput
+                            ? "bg-slate-200 text-slate-900"
+                            : "text-slate-400 hover:text-slate-600"
+                        }`}
                       >
-                        <Minus size={9} />
-                      </button>
-                      <span className="px-1.5 font-black text-[11px] min-w-4 text-center text-slate-900">
-                        {item.qty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateRowQty(item.id, 1)}
-                        className="p-1 hover:bg-slate-200 text-slate-600 cursor-pointer"
-                      >
-                        <Plus size={9} />
+                        <Pencil size={12} />
                       </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Catatan yang muncul di Bawah item (dinamis) */}
+                {/* AREA CATATAN DI BAWAH ITEM (dinamis) */}
                 {isReadOnly && item.note && (
                   <div className="mt-1 pt-1 border-t border-slate-100">
                     <p className="text-[11px] font-medium text-slate-500 italic break-words leading-tight">
@@ -245,16 +241,30 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                   </div>
                 )}
 
-                {!isReadOnly && showNoteInput && (
-                  <div className="mt-2 pt-1">
-                    <textarea
-                      value={item.note || ""}
-                      onChange={(e) => handleUpdateRowNote(item.id, e.target.value)}
-                      placeholder="Isi catatan untuk dapur..."
-                      rows={2}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
+                {!isReadOnly && (
+                  <>
+                    {/* Cuplikan note jika catatan belum terbuka dan ada note */}
+                    {!showNoteInput && item.note && (
+                      <div className="mt-1">
+                        <span className="text-[10px] text-slate-400 italic truncate block">
+                          {item.note.length > 40 ? item.note.slice(0, 40) + "…" : item.note}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Textarea catatan yang muncul saat pensil diklik */}
+                    {showNoteInput && (
+                      <div className="mt-2 pt-1">
+                        <textarea
+                          value={item.note || ""}
+                          onChange={(e) => handleUpdateRowNote(item.id, e.target.value)}
+                          placeholder="Isi catatan untuk dapur..."
+                          rows={2}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-slate-900"
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
@@ -262,7 +272,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
         )}
       </div>
 
-      {/* RINGKASAN BIAYA */}
+      {/* RINGKASAN BIAYA DAN TOMBOL (tetap seperti sebelumnya) */}
       <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3 shrink-0 text-xs font-bold uppercase tracking-tight text-slate-600">
         <div className="space-y-1.5">
           <div className="flex justify-between">
