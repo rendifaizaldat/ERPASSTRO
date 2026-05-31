@@ -9,11 +9,11 @@ import { LoginScreen } from "./features/auth/LoginScreen";
 
 import { errorBus } from "./core/instances";
 import { useToast } from "./components/Toast";
-import { Maximize, Minimize } from "lucide-react"; // Ditambahkan untuk Ikon Fullscreen
+import { Maximize, Minimize } from "lucide-react";
 
 function AppContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false); // State pelacak Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { showToast } = useToast();
 
@@ -31,28 +31,19 @@ function AppContent() {
   // =========================================================================
   useEffect(() => {
     const handleResize = () => {
-      // 1280px adalah standar minimum layar laptop/desktop desain kita.
       const baseWidth = 1280;
       const currentWidth = window.innerWidth;
 
       if (currentWidth < baseWidth) {
-        // Kalkulasi rasio layar saat ini dibandingkan dengan laptop ideal
         const scaleRatio = currentWidth / baseWidth;
-
-        // Memanipulasi root font-size.
-        // Efek Domino: Seluruh class Tailwind (p-4, w-80, text-sm, dll) yang menggunakan satuan 'rem'
-        // akan langsung menyusut secara proporsional tanpa merusak layout flex/grid.
         document.documentElement.style.fontSize = `${16 * scaleRatio}px`;
       } else {
-        // Kembali ke normal (16px) untuk Laptop 16" ke atas
         document.documentElement.style.fontSize = "16px";
       }
     };
 
-    // Pasang sensor saat browser di-resize (atau perangkat diputar / rotasi)
     window.addEventListener("resize", handleResize);
-    handleResize(); // Eksekusi tembakan pertama saat aplikasi dimuat
-
+    handleResize();
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -139,80 +130,79 @@ function AppContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-100 text-slate-800 overflow-hidden font-sans select-none">
+    <div className="flex flex-col h-screen bg-slate-100 text-slate-800 overflow-hidden font-sans select-none relative">
       <Header onMenuClick={() => setIsMenuOpen(true)} />
       <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
 
-      {/* Navigasi Diperbarui: Tab Dine In/Take Away di Kiri, Fullscreen di Kanan */}
-      <nav className="bg-white flex justify-between items-center px-8 border-b border-slate-200 shrink-0">
-        <div className="flex">
-          <button
-            onClick={() => {
-              console.log(
-                "[ASSTRO MONITOR UI] Sensor Klik Manual Tab Dine In Terdeteksi.",
-              );
-              setViewStateDirect({
-                selectedTable: null,
-                activeTab: "DINE_IN",
-                viewMode: "TABLES",
-              });
-            }}
-            className={`px-10 py-5 font-black text-xs uppercase tracking-widest transition-all border-b-4 cursor-pointer ${
-              viewState.activeTab === "DINE_IN" ||
-              (viewState.activeTab === "MENU" &&
-                viewState.selectedTable &&
-                !viewState.selectedTable.startsWith("TA-"))
-                ? "border-orange-600 text-orange-600"
-                : "border-transparent text-slate-400"
-            }`}
-          >
-            Dine In{" "}
-            {viewState.selectedTable &&
-              !viewState.selectedTable.startsWith("TA-") &&
-              `(${viewState.selectedTable})`}
-          </button>
-          <button
-            onClick={() => {
-              const taId = `TA-${Date.now()}`;
-              console.log(
-                `[ASSTRO MONITOR UI] Sensor Klik Manual Tab Take Away Terdeteksi. Minta ID: ${taId}`,
-              );
-              setViewStateDirect({
-                selectedTable: taId,
-                activeTab: "MENU",
-                viewMode: "MENU",
-              });
-            }}
-            className={`px-10 py-5 font-black text-xs uppercase tracking-widest transition-all border-b-4 cursor-pointer ${
-              viewState.activeTab === "TAKE_AWAY" ||
-              (viewState.selectedTable &&
-                viewState.selectedTable.startsWith("TA-"))
-                ? "border-orange-600 text-orange-600"
-                : "border-transparent text-slate-400"
-            }`}
-          >
-            Take Away
-          </button>
-        </div>
+      {/* Tombol Fullscreen Floating di pojok kiri atas */}
+      <button
+        onClick={toggleFullScreen}
+        className="fixed left-4 top-4 z-50 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-slate-100 transition-all cursor-pointer border border-slate-200"
+        title={isFullscreen ? "Keluar Fullscreen" : "Fullscreen"}
+      >
+        {isFullscreen ? (
+          <Minimize size={20} className="text-orange-600" />
+        ) : (
+          <Maximize size={20} className="text-slate-700" />
+        )}
+      </button>
 
-        {/* Tombol Fullscreen Khusus Presentasi Vercel */}
-        <div>
-          <button
-            onClick={toggleFullScreen}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black text-[10px] uppercase transition-all border border-slate-200 cursor-pointer shadow-sm active:scale-95"
-            title="Aktifkan Mode Layar Penuh"
-          >
-            {isFullscreen ? (
-              <Minimize size={14} className="text-orange-600" />
-            ) : (
-              <Maximize size={14} className="text-slate-600" />
-            )}
-            <span className="hidden sm:inline-block">
-              {isFullscreen ? "Exit Fullscreen" : "Fullscreen POS"}
-            </span>
-          </button>
-        </div>
-      </nav>
+      {/* Navigasi Dine In / Take Away - Hanya tampil jika BUKAN dalam mode MENU (katalog) */}
+      {viewState.viewMode !== "MENU" && (
+        <nav className="bg-white flex justify-between items-center px-8 border-b border-slate-200 shrink-0">
+          <div className="flex">
+            <button
+              onClick={() => {
+                console.log(
+                  "[ASSTRO MONITOR UI] Sensor Klik Manual Tab Dine In Terdeteksi.",
+                );
+                setViewStateDirect({
+                  selectedTable: null,
+                  activeTab: "DINE_IN",
+                  viewMode: "TABLES",
+                });
+              }}
+              className={`px-10 py-5 font-black text-xs uppercase tracking-widest transition-all border-b-4 cursor-pointer ${
+                viewState.activeTab === "DINE_IN" ||
+                (viewState.activeTab === "MENU" &&
+                  viewState.selectedTable &&
+                  !viewState.selectedTable.startsWith("TA-"))
+                  ? "border-orange-600 text-orange-600"
+                  : "border-transparent text-slate-400"
+              }`}
+            >
+              Dine In{" "}
+              {viewState.selectedTable &&
+                !viewState.selectedTable.startsWith("TA-") &&
+                `(${viewState.selectedTable})`}
+            </button>
+            <button
+              onClick={() => {
+                const taId = `TA-${Date.now()}`;
+                console.log(
+                  `[ASSTRO MONITOR UI] Sensor Klik Manual Tab Take Away Terdeteksi. Minta ID: ${taId}`,
+                );
+                setViewStateDirect({
+                  selectedTable: taId,
+                  activeTab: "MENU",
+                  viewMode: "MENU",
+                });
+              }}
+              className={`px-10 py-5 font-black text-xs uppercase tracking-widest transition-all border-b-4 cursor-pointer ${
+                viewState.activeTab === "TAKE_AWAY" ||
+                (viewState.selectedTable &&
+                  viewState.selectedTable.startsWith("TA-"))
+                  ? "border-orange-600 text-orange-600"
+                  : "border-transparent text-slate-400"
+              }`}
+            >
+              Take Away
+            </button>
+          </div>
+          {/* Tombol fullscreen sudah dipindah, jadi area kanan kosong */}
+          <div></div>
+        </nav>
+      )}
 
       <main className="flex-1 flex overflow-hidden bg-[#F8FAFC]">
         {viewState.viewMode === "TABLES" ? (
