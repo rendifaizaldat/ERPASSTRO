@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Clock } from "lucide-react";
+import { Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Footer = () => {
@@ -15,21 +15,27 @@ export const Footer = () => {
   }, []);
 
   return (
-    <footer className="h-12 bg-slate-900 text-[10px] font-black text-slate-500 px-8 flex items-center justify-between uppercase tracking-widest shrink-0">
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          {isOnline ? (
-            <Wifi size={14} className="text-green-500" />
-          ) : (
-            <WifiOff size={14} className="text-red-500" />
-          )}
-          <span className={isOnline ? "text-slate-300" : "text-red-400"}>
-            Network: {isOnline ? "Stable" : "Offline Mode"}
-          </span>
-        </div>
+    <footer className="h-7 bg-slate-900 text-[9px] font-black text-slate-500 px-4 flex items-center justify-between uppercase tracking-widest shrink-0">
+      {/* Kiri: Status Jaringan */}
+      <div className="flex items-center gap-2">
+        {isOnline ? (
+          <Wifi size={12} className="text-green-500" />
+        ) : (
+          <WifiOff size={12} className="text-red-500" />
+        )}
+        <span className={isOnline ? "text-slate-300" : "text-red-400"}>
+          {isOnline ? "Online" : "Offline"}
+        </span>
       </div>
-      <div className="flex items-center gap-4">
-        <span className="text-orange-500">ASSTRO v1.0.0</span>
+
+      {/* Tengah: Kredit */}
+      <div className="text-slate-400">
+        rendifaizaldat &copy;2026
+      </div>
+
+      {/* Kanan: Versi + beta */}
+      <div className="text-slate-500">
+        ASSTRO v1.0.0 <span className="text-orange-500">beta</span>
       </div>
     </footer>
   );
