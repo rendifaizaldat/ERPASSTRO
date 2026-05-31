@@ -164,7 +164,7 @@ export const KeranjangBelanja: React.FC<KeranjangBelanjaProps> = ({
                       <span className="font-black text-[11px] text-slate-500 shrink-0">
                         ×{item.qty}
                       </span>
-                      <span className="text-xs font-black text-slate-900 shrink-0">
+                      <span className="text-xs font-black text-slate-900 shrink-0 text-right">
                         Rp {(item.price * item.qty).toLocaleString("id-ID")}
                       </span>
                     </div>
