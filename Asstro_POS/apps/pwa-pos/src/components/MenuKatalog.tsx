@@ -91,7 +91,7 @@ export const MenuKatalog: React.FC<MenuKatalogProps> = ({
           />
         </div>
         {/* Kategori scroll horizontal */}
-        <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none max-w-[50%]">
+        <div className="flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none max-w-[70%]">
           {categories.map((cat) => (
             <button
               key={cat}
