@@ -2,12 +2,12 @@ import { z } from "zod";
 
 export const EventMetadataSchema = z.object({
   seq: z.number().int().positive(),
-  prev_hash: z.string(),
+  prevHash: z.string(),
   hash: z.string(),
   hlc: z.string(),
-  origin_device_id: z.string(),
-  operator_id: z.string(),
-  branch_id: z.string(),
+  originDeviceId: z.string(),
+  operatorId: z.string(),
+  branchId: z.string(),
   signature: z.string(),
 });
 
@@ -20,7 +20,7 @@ export const MemberSchema = z.object({
 
 const SystemInitializedPayload = z.object({
   company_name: z.string(),
-  branch_id: z.string(),
+  branchId: z.string(),
   region_name: z.string(),
   latitude: z.number(),
   longitude: z.number(),
@@ -60,7 +60,7 @@ const EnterpriseSaleCreatedPayload = z.object({
   organization: z.object({
     company_id: z.string(),
     company_name: z.string(),
-    branch_id: z.string(),
+    branchId: z.string(),
     branch_name: z.string(),
     outlet_type: z.string(),
     region: z.string(),
@@ -141,7 +141,7 @@ const OrderVoidedPayload = z.object({
   sku: z.string(),
   qtyToVoid: z.number(),
   voidType: z.enum(["SALAH_INPUT", "BARANG_KOSONG", "CANCEL"]),
-  operator_id: z.string(),
+  operatorId: z.string(),
   manager_id: z.string().optional(),
   voidNote: z.string().optional(),
   timestamp: z.number().optional(),
@@ -151,7 +151,7 @@ const OrderRefundedPayload = z.object({
   invoice_id: z.string(),
   items: z.array(z.object({ sku: z.string(), qty: z.number() })),
   refundType: z.enum(["CANCEL", "SOLD_OUT"]),
-  operator_id: z.string(),
+  operatorId: z.string(),
   manager_id: z.string(),
   refundNote: z.string(),
   timestamp: z.number().optional(),
@@ -160,6 +160,13 @@ const OrderRefundedPayload = z.object({
 // ============================================================================
 // [NEW] SKEMA ARSITEKTUR 3 LAPIS (ORDER -> INVOICE -> PAYMENT)
 // ============================================================================
+
+const LiteralSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+type Literal = z.infer<typeof LiteralSchema>;
+type Json = Literal | { [key: string]: Json } | Json[];
+const JsonSchema: z.ZodType<Json> = z.lazy(() =>
+  z.union([LiteralSchema, z.array(JsonSchema), z.record(JsonSchema)])
+);
 
 // Layer 1: Order (Pesanan / Dapur)
 const LayerOrderItemSchema = z.object({
@@ -177,6 +184,20 @@ const LayerOrderItemSchema = z.object({
     .optional()
     .nullable(),
   notes: z.string().nullable(),
+  modifiers: z
+    .array(
+      z.object({
+        modifierSku: z.string(),
+        name: z.string(),
+        price: z.number(),
+      })
+    )
+    .optional()
+    .refine((val) => {
+        // Validation ensures any modifiers passed are not simply blank or undefined
+        if (!val) return true;
+        return val.every(m => m.modifierSku && m.modifierSku.length > 0);
+    }, { message: "Invalid modifier SKU" }),
 });
 
 const LayerOrderEventSchema = z.object({
@@ -188,6 +209,19 @@ const LayerOrderEventSchema = z.object({
   items: z.array(LayerOrderItemSchema),
   businessDate: z.string().default("1970-01-01"),
 });
+
+const LayerOrderUpdatedEventSchema = z.object({
+  orderId: z.string(),
+  tableLabel: z.string(),
+  customerName: z.string().nullable(),
+  guestCount: z.number(),
+  operatorId: z.string(),
+  updatedItems: z.array(LayerOrderItemSchema),
+  removedItemIds: z.array(z.string()).default([]),
+  version: z.number().int().positive().default(1),
+  businessDate: z.string().default("1970-01-01"),
+});
+
 
 // Layer 2: Invoice (Tagihan / Keuangan)
 const LayerInvoiceEventSchema = z.object({
@@ -225,6 +259,20 @@ const LayerInvoiceStatusUpdateSchema = z.object({
   ]),
   operatorId: z.string(),
   notes: z.string().nullable(),
+  modifiers: z
+    .array(
+      z.object({
+        modifierSku: z.string(),
+        name: z.string(),
+        price: z.number(),
+      })
+    )
+    .optional()
+    .refine((val) => {
+        // Validation ensures any modifiers passed are not simply blank or undefined
+        if (!val) return true;
+        return val.every(m => m.modifierSku && m.modifierSku.length > 0);
+    }, { message: "Invalid modifier SKU" }),
 });
 
 // Layer 3: Payment (Pembayaran / Kas)
@@ -258,7 +306,7 @@ const LayerPaymentEventSchema = z.object({
   traceNumber: z.string().optional().nullable(),
   batchNumber: z.string().optional().nullable(),
 
-  settlementMetadata: z.record(z.string(), z.any()).optional().nullable(),
+  settlementMetadata: z.record(z.string(), JsonSchema).optional().nullable(),
 });
 
 // Pengeluaran Kas untuk Refund
@@ -362,7 +410,7 @@ const PettyCashResolvedPayload = z.object({
   timestamp: z.number(),
 });
 
-const SettingsUpdatedPayload = z.record(z.string(), z.any());
+const SettingsUpdatedPayload = z.record(z.string(), JsonSchema);
 
 // ============================================================================
 // APP EVENT SCHEMA (Master Union)
@@ -407,7 +455,7 @@ export const AppEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("ORDER_UPDATED"),
-    payload: LayerOrderEventSchema,
+    payload: LayerOrderUpdatedEventSchema,
   }),
   z.object({
     type: z.literal("INVOICE_CREATED"),
@@ -533,3 +581,17 @@ export const EnvelopedEventSchema = z.intersection(
 
 export type EnvelopedEvent = z.infer<typeof EnvelopedEventSchema>;
 export type AppEvent = z.infer<typeof AppEventSchema>;
+
+// ============================================================================
+// OBSERVABILITY MIDDLEWARE: ZOD PARSING WRAPPER
+// ============================================================================
+export const parseEvent = (rawPayload: unknown): AppEvent => {
+  const result = AppEventSchema.safeParse(rawPayload);
+  if (!result.success) {
+    console.error("[ZOD_VALIDATION_ERROR] Failed to parse event payload.");
+    console.error("[ZOD_VALIDATION_ERROR] Raw Payload:", JSON.stringify(rawPayload, null, 2));
+    console.error("[ZOD_VALIDATION_ERROR] Zod Error:", result.error.format());
+    throw new Error("Invalid Event Payload Structure");
+  }
+  return result.data;
+};

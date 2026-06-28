@@ -224,7 +224,7 @@ export const usePosSync = () => {
   // ------------------------------------------------------------
   const processEvent = (ev: any, mem: typeof memRef.current) => {
     if (ev.type === "SHIFT_OPENED") {
-      mem.activeOperatorIdFromLedger = ev.payload.operator_id;
+      mem.activeOperatorIdFromLedger = ev.payload.operatorId;
     }
     if (ev.type === "SHIFT_CLOSED" || ev.type === "END_OF_DAY_PROCESSED") {
       mem.activeOperatorIdFromLedger = null;
@@ -326,7 +326,7 @@ export const usePosSync = () => {
             ? `${ev.payload.items.length} Menu`
             : "Seluruh Pesanan",
         totalAmount: ev.payload.totalRefundAmount || 0,
-        cashierName: ev.payload.operator_id || "KASIR",
+        cashierName: ev.payload.operatorId || "KASIR",
         managerName: ev.payload.manager_id || "SPV/MANAGER",
         note: ev.payload.voidNote || ev.payload.reason || "Tidak ada catatan",
         type: ev.type.includes("REFUND") ? "REFUND" : "VOID",

@@ -20,7 +20,7 @@ export interface LedgerEvent {
   payload: Record<string, unknown>;
   metadata: Record<string, unknown>;
   hash: string;
-  prev_hash: string;
+  prevHash: string;
   ts: number;
   logical: number;
   node: string;
@@ -169,6 +169,37 @@ export class LedgerEngine {
         await db.addCollections({
           events: {
             schema: EventSchema,
+            migrationStrategies: {
+              1: function(oldDoc) {
+                // Map old snake_case metadata to new camelCase
+                if (oldDoc.metadata) {
+                  if (oldDoc.metadata.operator_id) {
+                    oldDoc.metadata.operatorId = oldDoc.metadata.operator_id;
+                    delete oldDoc.metadata.operator_id;
+                  }
+                  if (oldDoc.metadata.branch_id) {
+                    oldDoc.metadata.branchId = oldDoc.metadata.branch_id;
+                    delete oldDoc.metadata.branch_id;
+                  }
+                  if (oldDoc.metadata.origin_device_id) {
+                    oldDoc.metadata.originDeviceId = oldDoc.metadata.origin_device_id;
+                    delete oldDoc.metadata.origin_device_id;
+                  }
+                  if (oldDoc.metadata.prev_hash) {
+                    oldDoc.metadata.prevHash = oldDoc.metadata.prev_hash;
+                    delete oldDoc.metadata.prev_hash;
+                  }
+                }
+
+                // Map root level prev_hash to prevHash
+                if (oldDoc.prev_hash) {
+                  oldDoc.prevHash = oldDoc.prev_hash;
+                  delete oldDoc.prev_hash;
+                }
+
+                return oldDoc;
+              }
+            }
           },
         });
         window.__ASSTRO_LEDGER_DB__ = db;
@@ -267,7 +298,7 @@ export class LedgerEngine {
 
   private generateHash(data: {
     seq: number;
-    prev_hash: string;
+    prevHash: string;
     type: string;
     payload: Record<string, unknown>;
     metadata: Record<string, unknown>;
@@ -275,7 +306,7 @@ export class LedgerEngine {
   }): string {
     const canonical = stableStringify({
       seq: data.seq,
-      prev_hash: data.prev_hash,
+      prevHash: data.prevHash,
       type: data.type,
       payload: data.payload,
       metadata: data.metadata,
@@ -315,7 +346,7 @@ export class LedgerEngine {
       const hash = this.generateHash({
         seq: nextSeq,
 
-        prev_hash: prevHash,
+        prevHash: prevHash,
 
         type,
 
@@ -356,7 +387,7 @@ export class LedgerEngine {
 
         hash,
 
-        prev_hash: prevHash,
+        prevHash: prevHash,
 
         ts,
 
@@ -462,7 +493,7 @@ export class LedgerEngine {
         // Chain
         // ---------------------------------------
 
-        if (event.prev_hash !== previousHash) {
+        if (event.prevHash !== previousHash) {
           throw new Error(`Broken chain at ${event.seq}`);
         }
 
@@ -473,7 +504,7 @@ export class LedgerEngine {
         const recalculatedHash = this.generateHash({
           seq: event.seq,
 
-          prev_hash: event.prev_hash,
+          prevHash: event.prevHash,
 
           type: event.type,
 

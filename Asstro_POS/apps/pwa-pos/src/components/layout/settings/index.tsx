@@ -24,11 +24,12 @@ interface SidebarSettingsProps {
 
 export const SidebarSettings = ({ isOpen, onClose }: SidebarSettingsProps) => {
   // 1. SEMUA HOOKS HARUS BERADA DI BAGIAN PALING ATAS
+  const { state: posState } = usePos();
   const [activeMenu, setActiveMenu] = useState("STRUK");
   const [isSaving, setIsSaving] = useState(false);
 
   // State sentral untuk menampung seluruh perubahan sebelum di-save
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState(posState?.settings || {
     struk: {
       header: "",
       footer: "",
@@ -39,15 +40,8 @@ export const SidebarSettings = ({ isOpen, onClose }: SidebarSettingsProps) => {
     printer: { mainType: "Thermal", autoPrint: true, copy: 1 },
     pajak: { ppn: 11, serviceCharge: 5, taxIncluded: true },
     pembayaran: { cash: true, debit: true, qris: true },
-    debit: {
-      bankName: "BCA", // Enum: BCA, MANDIRI, BNI, BRI, ETC
-    },
-    qris: {
-      bankName: "",
-      accountNumber: "",
-      accountName: "",
-      qrUrl: "",
-    },
+    debit: { bankName: "BCA" },
+    qris: { bankName: "", accountNumber: "", accountName: "", qrUrl: "" },
     io: { useSmartInput: true },
   });
 

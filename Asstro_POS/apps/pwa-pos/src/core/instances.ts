@@ -49,7 +49,7 @@ export const exportLedgerToJson = async (branchId: string): Promise<void> => {
 
     const backupData = {
       version: "1.0",
-      branch_id: branchId,
+      branchId: branchId,
       timestamp: Date.now(),
       record_count: events.length,
       events: events,

@@ -11,3 +11,5 @@ export * from "./db_wms/wms.events";
 export * from "./db_wms/wms.transactions";
 export * from "./db_wms/wms.vendors";
 export * from "./db_wms/wms.akunting";
+
+export * from "./db_pos/device_profiles";

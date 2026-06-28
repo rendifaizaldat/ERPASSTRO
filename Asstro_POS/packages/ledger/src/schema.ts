@@ -3,7 +3,7 @@ import { RxJsonSchema } from "rxdb";
 export interface LedgerEventDoc {
   id: string;
   seq: number;
-  prev_hash: string;
+  prevHash: string;
   hash: string;
   hlc: string;
   type: string;
@@ -16,14 +16,14 @@ export interface LedgerEventDoc {
 
 export const EventSchema: RxJsonSchema<LedgerEventDoc> = {
   title: "event ledger schema",
-  version: 0,
+  version: 1, // Increased version from 0 to 1 for migration
   primaryKey: "id",
   type: "object",
 
   properties: {
     id: { type: "string", maxLength: 100 },
     seq: { type: "number", minimum: 1, multipleOf: 1 },
-    prev_hash: { type: "string" },
+    prevHash: { type: "string" },
     hash: { type: "string" },
     hlc: { type: "string" },
     type: { type: "string" },

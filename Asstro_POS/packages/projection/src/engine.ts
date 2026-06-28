@@ -97,7 +97,7 @@ export class ProjectionEngine {
           p.voidNote ||
           p.voidReason ||
           "[Sistem] Otorisasi Keamanan Dijalankan",
-        operatorId: p.operatorId || p.managerId || p.operator_id || "SYS",
+        operatorId: p.operatorId || p.managerId || p.operatorId || "SYS",
         orderId: p.invoiceId || p.orderId || p.tableLabel || "UNKNOWN",
       });
     }
@@ -107,7 +107,7 @@ export class ProjectionEngine {
         const payload = event.payload as any;
         this.isInitialized = true;
         this.companyName = payload.company_name || "";
-        this.branchId = payload.branch_id || "";
+        this.branchId = payload.branchId || "";
         this.regionName = payload.region_name || "";
         this.latitude = Number(payload.latitude) || 0;
         this.longitude = Number(payload.longitude) || 0;
@@ -565,9 +565,9 @@ export class ProjectionEngine {
 
       case "SHIFT_OPENED": {
         const payload = event.payload as any;
-        if (payload.cashierId || payload.operator_id) {
+        if (payload.cashierId || payload.operatorId) {
           const found = this.staffList.find(
-            (s) => s.id === (payload.cashierId || payload.operator_id),
+            (s) => s.id === (payload.cashierId || payload.operatorId),
           );
           if (found) {
             this.activeOperator = found;
