@@ -152,22 +152,48 @@ export const SetupWizard: React.FC = () => {
       addLog(`[PROVISIONING] Device Takeover sukses. ID: ${deviceId}`);
       await ledger.init();
       addLog(`[SYSTEM] Storage Engine (RxDB) Initialized.`);
-
       // 1. HYDRATE: Ambil Staff & Master Data
       addLog(`[API/PULL] Menghubungi server pusat untuk Hydration...`);
-      const syncResponse = await fetch(
-        `http://localhost:4000/api/sync/hydrate${replaceId ? `?replaceDeviceId=${replaceId}` : ""}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${deviceToken}`,
-          },
-        },
-      );
-      const syncData = await syncResponse.json();
-      if (!syncResponse.ok)
-        throw new Error(syncData.error || "Hydration gagal.");
+
+      let retries = 0;
+      let syncData: any = null;
+      let syncResponse: Response | null = null;
+      let chunkIndex = parseInt(localStorage.getItem("ASSTRO_HYDRATION_CHECKPOINT") || "1", 10);
+      let backoffDelay = 2000;
+      const MAX_RETRIES = 5;
+
+      while (retries < MAX_RETRIES) {
+        try {
+          syncResponse = await fetch(
+            `http://localhost:4000/api/sync/hydrate${replaceId ? `?replaceDeviceId=${replaceId}` : ""}&chunk=${chunkIndex}`,
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${deviceToken}`,
+              },
+            },
+          );
+          syncData = await syncResponse.json();
+          if (!syncResponse.ok) throw new Error(syncData.error || "Hydration gagal.");
+          if (syncData.schemaVersion && syncData.schemaVersion !== 1) {
+            throw new Error("Incompatible schema. Re-provisioning required.");
+          }
+
+          localStorage.setItem("ASSTRO_HYDRATION_CHECKPOINT", (chunkIndex + 1).toString());
+          break; // successfully fetched
+        } catch (err: any) {
+          retries++;
+          if (retries >= MAX_RETRIES) {
+            addLog(`[FATAL] Hydration gagal setelah ${MAX_RETRIES} percobaan. Klik Reset Provisioning untuk mengulang.`);
+            // Show fallback UI logic could be triggered here via state.
+            throw err;
+          }
+          addLog(`[RETRY] Percobaan ke-${retries} gagal. Retrying in ${backoffDelay}ms...`);
+          await new Promise(res => setTimeout(res, backoffDelay));
+          backoffDelay *= 2; // Exponential backoff
+        }
+      }
 
       // Staff disimpan statis di memori lokal
       localStorage.setItem(

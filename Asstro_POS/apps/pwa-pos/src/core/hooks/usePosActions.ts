@@ -24,7 +24,7 @@ export const usePosActions = (syncData: any) => {
     try {
       await ledger.appendEvent("SETTINGS_UPDATED", {
         ...settingsPayload,
-        operator_id: currentOperator?.id || "SYS",
+        operatorId: currentOperator?.id || "SYS",
         timestamp: Date.now(),
       });
       eventBus.next(undefined as any);
@@ -290,7 +290,7 @@ export const usePosActions = (syncData: any) => {
         localStorage.setItem("ASSTRO_CURRENT_SHIFT_ID", shiftId);
 
         await ledger.appendEvent("SHIFT_OPENED", {
-          operator_id: targetStaff.id,
+          operatorId: targetStaff.id,
           initial_cash: initialCash,
           shiftId,
           branchId,
@@ -379,7 +379,7 @@ export const usePosActions = (syncData: any) => {
         system_cash: expectedCash,
         difference: cashDiff,
         reason: differenceReason,
-        operator_id: currentOperator?.id || "SYS",
+        operatorId: currentOperator?.id || "SYS",
         timestamp: Date.now(),
       });
 
@@ -752,7 +752,7 @@ export const usePosActions = (syncData: any) => {
           sku: targetItemId,
           qtyToVoid,
           voidType,
-          operator_id: currentOperator?.id || "UNKNOWN",
+          operatorId: currentOperator?.id || "UNKNOWN",
           manager_id,
           voidNote,
           timestamp: Date.now(),

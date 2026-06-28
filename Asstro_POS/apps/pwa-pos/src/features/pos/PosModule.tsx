@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import React, { useState, useMemo, useEffect } from "react";
 import { TableGrid } from "./TableGrid";
 import { usePos } from "../../core/PosProvider";
@@ -549,7 +550,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
             state?.companyName ||
             state?.settings?.sistem?.namaToko ||
             "ASSTRO HOLDING",
-          branch_id:
+          branchId:
             state?.branchId ||
             state?.settings?.sistem?.cabangId ||
             "UNKNOWN_BRANCH",
@@ -756,26 +757,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
         />
       </div>
       {showPaymentModal && (
-        <BillingModal
-          selectedTable={selectedTable}
-          cart={cart}
-          cartSubtotal={cartSubtotal}
-          discountAmount={discountAmount}
-          serviceCharge={serviceCharge}
-          restaurantTax={restaurantTax}
-          cartGrandTotal={cartGrandTotal}
-          paymentType={paymentType as any}
-          setPaymentType={setPaymentType as any}
-          cashReceived={cashReceived}
-          setCashReceived={setCashReceived}
-          calculatedChange={calculatedChange}
-          cardNumber={cardNumber}
-          setCardNumber={setCardNumber}
-          priveNote={priveNote}
-          setPriveNote={setPriveNote}
-          setShowPaymentModal={setShowPaymentModal}
-          handleFinalCheckoutSubmit={handleFinalCheckoutSubmit}
-        />
+        <ErrorBoundary fallback={<div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm p-4"><div className="bg-white p-6 rounded-3xl">State tidak siap, harap refresh.</div></div>}>
+          <BillingModal
+            selectedTable={selectedTable}
+            cart={cart}
+            cartSubtotal={cartSubtotal}
+            discountAmount={discountAmount}
+            serviceCharge={serviceCharge || 0}
+            restaurantTax={restaurantTax || 0}
+            cartGrandTotal={cartGrandTotal}
+            paymentType={paymentType as any}
+            setPaymentType={setPaymentType as any}
+            cashReceived={cashReceived}
+            setCashReceived={setCashReceived}
+            calculatedChange={calculatedChange}
+            cardNumber={cardNumber}
+            setCardNumber={setCardNumber}
+            priveNote={priveNote}
+            setPriveNote={setPriveNote}
+            setShowPaymentModal={setShowPaymentModal}
+            handleFinalCheckoutSubmit={handleFinalCheckoutSubmit}
+            activeOrderId={targetTableObj?.currentOrderId || targetTableObj?.lastOrderId || fallbackOrderId}
+          />
+        </ErrorBoundary>
       )}
       {showManagerPinModal && (
         <SupervisorModal

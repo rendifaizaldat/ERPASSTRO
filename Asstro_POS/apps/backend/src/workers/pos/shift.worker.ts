@@ -52,7 +52,7 @@ async function processShiftEvent(entry: any) {
         id: p.shiftId,
         branchId: branchId,
         deviceId: p.deviceId || "UNKNOWN-DEVICE",
-        cashierId: p.cashierId || p.operator_id,
+        cashierId: p.cashierId || p.operatorId,
         openedAt: new Date(p.openedAt || Date.now()),
         startingCash: String(p.startingCash || p.initial_cash || 0),
         businessDate: p.businessDate || "1970-01-01",
