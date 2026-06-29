@@ -274,7 +274,7 @@ export const usePosActions = (syncData: any) => {
         const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
         const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
         const deviceId =
-          localStorage.getItem("ASSTRO_DEVICE_TOKEN") ||
+          localStorage.getItem("ASSTRO_DEVICE_ID") ||
           (state as any)?.settings?.sistem?.deviceId ||
           "UNKNOWN-DEVICE";
 

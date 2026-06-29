@@ -15,7 +15,10 @@ export const searchTransactions = async (
   res: Response,
 ): Promise<any> => {
   try {
-    const { searchType, keyword, date, startDate, endDate } = req.query;
+    const { searchType, keyword, date, startDate, endDate, limit, offset } = req.query;
+
+    const limitNum = Math.min(Number(limit) || 100, 1000); // Default to 100, cap at 1000 to prevent overload
+    const offsetNum = Number(offset) || 0;
 
     const waiters = aliasedTable(users, "waiters");
     const cashiers = aliasedTable(users, "cashiers");
@@ -67,7 +70,8 @@ export const searchTransactions = async (
       .leftJoin(cashiers, eq(payments.operatorId, cashiers.id))
       .where(and(...conditions))
       .orderBy(sql`${invoices.createdAt} DESC`)
-      .limit(100);
+      .limit(limitNum)
+      .offset(offsetNum);
 
     const formattedResults = await Promise.all(
       rawResults.map(async (tx) => {
