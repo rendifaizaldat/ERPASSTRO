@@ -6,6 +6,7 @@ import {
   products,
   orders,
   orderItems,
+  deviceProfiles,
 } from "../../db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { ulid } from "ulidx";
@@ -38,6 +39,7 @@ export const startPosProjector = async () => {
         "TABLE_PAYMENT_PROCESSED",
         "PAYMENT_RECEIVED", // Sinyal Uang Masuk
         "ORDER_REFUNDED", // Sinyal Jurnal Refund
+        "SETTINGS_UPDATED",
       ];
 
       if (projectorEvents.includes(payload.eventType)) {
@@ -130,6 +132,34 @@ async function processEvent(entry: any) {
           SET status = 'completed', updated_at = NOW() 
           WHERE UPPER(table_label) = ${cleanLabel} AND status = 'open'
         `);
+      }
+      break;
+    }
+
+    case "SETTINGS_UPDATED": {
+      if (entry.sourceDeviceId || p.deviceId) {
+        const deviceId = entry.sourceDeviceId || p.deviceId;
+        await db
+          .insert(deviceProfiles)
+          .values({
+            id: deviceId,
+            printerSettings: p.printer || null,
+            receiptSettings: p.struk || null,
+            paymentGateways: {
+              pajak: p.pajak,
+              pembayaran: p.pembayaran,
+              qris: p.qris,
+              debit: p.debit,
+            },
+          })
+          .onConflictDoUpdate({
+            target: deviceProfiles.id,
+            set: {
+              printerSettings: sql`excluded.printer_settings`,
+              receiptSettings: sql`excluded.receipt_settings`,
+              paymentGateways: sql`excluded.payment_gateways`,
+            },
+          });
       }
       break;
     }

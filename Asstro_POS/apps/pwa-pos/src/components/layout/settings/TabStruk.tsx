@@ -5,21 +5,44 @@ interface TabStrukProps {
   setSettings: React.Dispatch<React.SetStateAction<any>>;
 }
 
-export const TabStruk = ({ settings, setSettings }: TabStrukProps) => (
-  <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
-    <h3 className="text-lg font-black uppercase text-slate-800 mb-5 border-b pb-2">
-      Pengaturan Struk & Invoice
-    </h3>
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-          Logo Struk Default
-        </label>
-        <input
-          type="file"
-          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
-        />
-      </div>
+export const TabStruk = ({ settings, setSettings }: TabStrukProps) => {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setSettings((prev: any) => ({
+          ...prev,
+          struk: { ...prev.struk, logo: base64String }
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+      <h3 className="text-lg font-black uppercase text-slate-800 mb-5 border-b pb-2">
+        Pengaturan Struk & Invoice
+      </h3>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+            Logo Struk Default
+          </label>
+          <div className="flex items-center gap-4">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleLogoUpload}
+              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+            />
+            {settings?.struk?.logo && (
+              <img src={settings.struk.logo} alt="Logo Struk" className="h-10 object-contain rounded border border-slate-200" />
+            )}
+          </div>
+        </div>
       <div className="grid grid-cols-2 gap-4 mt-4">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
@@ -76,4 +99,5 @@ export const TabStruk = ({ settings, setSettings }: TabStrukProps) => (
       </div>
     </div>
   </div>
-);
+  );
+};

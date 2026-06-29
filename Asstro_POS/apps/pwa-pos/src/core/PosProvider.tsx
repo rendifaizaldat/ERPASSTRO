@@ -39,6 +39,9 @@ interface PosContextType {
     actualCash: number,
     systemCash: number,
     difference: number,
+    actualNonCash: number,
+    expectedNonCash: number,
+    nonCashDifference: number,
     differenceReason: string,
   ) => Promise<void>;
   executeEndOfDay: (
