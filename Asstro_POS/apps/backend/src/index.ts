@@ -39,7 +39,23 @@ const app = express();
 const port = process.env.PORT || 4000;
 const httpServer = createServer(app);
 
-app.use(cors());
+// CORS Security Hardening: strict whitelist-based policy
+const whitelist = [
+  process.env.PWA_FRONTEND_URL || "http://localhost:5173",
+  process.env.WMS_FRONTEND_URL || "http://localhost:5174",
+];
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    if (!origin || whitelist.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // --- POS & SHARED ROUTES ---

@@ -75,7 +75,7 @@ export const SetupWizard: React.FC = () => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        "http://localhost:4000/api/provision/login",
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/provision/login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -103,7 +103,7 @@ export const SetupWizard: React.FC = () => {
     setIsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:4000/api/provision/branch-devices/${selectedBranchId}`,
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/provision/branch-devices/${selectedBranchId}`,
       );
       const data = await response.json();
       if (response.ok) setBranchDevices(data.devices || []);
@@ -165,7 +165,7 @@ export const SetupWizard: React.FC = () => {
       while (retries < MAX_RETRIES) {
         try {
           syncResponse = await fetch(
-            `http://localhost:4000/api/sync/hydrate${replaceId ? `?replaceDeviceId=${replaceId}` : ""}&chunk=${chunkIndex}`,
+            `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/sync/hydrate${replaceId ? `?replaceDeviceId=${replaceId}` : ""}&chunk=${chunkIndex}`,
             {
               method: "GET",
               headers: {
@@ -265,7 +265,7 @@ export const SetupWizard: React.FC = () => {
         `[RECOVERY] Memeriksa histori jurnal EOD / operasional masa lalu...`,
       );
       const pullResponse = await fetch(
-        "http://localhost:4000/api/sync/pull?since=0",
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/sync/pull?since=0`,
         {
           method: "GET",
           headers: {
@@ -333,6 +333,8 @@ export const SetupWizard: React.FC = () => {
       // Amankan Token baru sekarang, agar App.tsx belum trigger saat proses berjalan
       localStorage.setItem("ASSTRO_DEVICE_TOKEN", deviceToken);
       localStorage.setItem("ASSTRO_BRANCH_ID", branchId);
+      // Ensure ASSTRO_DEVICE_ID is persistently stored and adheres to a maximum 26 character limit (ULID standard)
+      localStorage.setItem("ASSTRO_DEVICE_ID", deviceId.substring(0, 26));
 
       setIsRecoveryDone(true);
     } catch (err: any) {
@@ -368,7 +370,7 @@ export const SetupWizard: React.FC = () => {
       };
 
       const provisionResponse = await fetch(
-        "http://localhost:4000/api/provision/device",
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/provision/device`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

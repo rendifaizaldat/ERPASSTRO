@@ -23,7 +23,7 @@ export const ReauthModal: React.FC<ReauthModalProps> = ({
     try {
       const branchId = localStorage.getItem("ASSTRO_BRANCH_ID");
       const response = await fetch(
-        "http://localhost:4000/api/provision/reauth",
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/provision/reauth`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
