@@ -79,6 +79,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const [staffPin, setStaffPin] = useState("");
 
   const [actualCash, setActualCash] = useState("");
+  const [actualNonCash, setActualNonCash] = useState("");
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -254,14 +255,18 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     actCash: number,
     sysCash: number,
     diff: number,
+    actNonCash: number,
+    sysNonCash: number,
+    nonCashDiff: number,
     reason: string,
   ) => {
-    if (!actCash && actCash !== 0) {
-      showToast("Wajib menginput nominal fisik uang di dalam laci!", "ERROR");
+    if ((!actCash && actCash !== 0) || (!actNonCash && actNonCash !== 0)) {
+      showToast("Wajib menginput nominal fisik uang tunai dan non-tunai!", "ERROR");
       return;
     }
-    await logoutWithReconciliation(actCash, sysCash, diff, reason);
+    await logoutWithReconciliation(actCash, sysCash, diff, actNonCash, sysNonCash, nonCashDiff, reason);
     setActualCash("");
+    setActualNonCash("");
     setShowReconModal(false);
     onClose();
     showToast(
@@ -427,6 +432,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         setShowReconModal={setShowReconModal}
         actualCash={actualCash}
         setActualCash={setActualCash}
+        actualNonCash={actualNonCash}
+        setActualNonCash={setActualNonCash}
         handleLogoutSubmit={handleLogoutSubmit}
       />
 

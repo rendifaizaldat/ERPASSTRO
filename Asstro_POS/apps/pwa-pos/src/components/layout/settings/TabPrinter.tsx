@@ -6,6 +6,17 @@ interface TabPrinterProps {
 }
 
 export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
+  const handleTestPrint = (target: "MAIN" | "KDS") => {
+    window.dispatchEvent(
+      new CustomEvent("TEST_PRINT", {
+        detail: {
+          target,
+          config: target === "MAIN" ? settings?.printer : settings?.printerKds,
+        },
+      })
+    );
+  };
+
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
       <h3 className="text-lg font-black uppercase text-slate-800 mb-5 border-b pb-2">
@@ -47,7 +58,10 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
           </div>
         </div>
         <div className="flex items-center flex-wrap gap-4 pt-2">
-          <button className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md">
+          <button
+            onClick={() => handleTestPrint("MAIN")}
+            className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md"
+          >
             Print Test Page
           </button>
           <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white px-3 py-2 border rounded-lg">
@@ -85,6 +99,8 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
             </label>
             <input
               type="text"
+              value={settings?.printerKds?.ip || ""}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printerKds: { ...prev.printerKds, ip: e.target.value } }))}
               placeholder="192.168.1.100:9100"
               className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white"
             />
@@ -93,20 +109,28 @@ export const TabPrinter = ({ settings, setSettings }: TabPrinterProps) => {
             <label className="block text-xs font-bold uppercase text-slate-500 mb-1">
               Jalur Komunikasi
             </label>
-            <select className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white">
-              <option>LAN (Network) - Disarankan</option>
-              <option>Bluetooth</option>
+            <select
+              value={settings?.printerKds?.connection || "LAN"}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printerKds: { ...prev.printerKds, connection: e.target.value } }))}
+              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm font-bold bg-white"
+            >
+              <option value="LAN">LAN (Network) - Disarankan</option>
+              <option value="Bluetooth">Bluetooth</option>
             </select>
           </div>
         </div>
         <div className="flex items-center gap-4 pt-2">
-          <button className="px-5 py-2.5 bg-slate-200 text-slate-800 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-slate-300 transition-colors">
+          <button
+            onClick={() => handleTestPrint("KDS")}
+            className="px-5 py-2.5 bg-slate-200 text-slate-800 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-slate-300 transition-colors"
+          >
             Test Dapur
           </button>
           <label className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-white px-3 py-2 border rounded-lg">
             <input
               type="checkbox"
-              defaultChecked
+              checked={settings?.printerKds?.autoPrint ?? true}
+              onChange={(e) => setSettings((prev: any) => ({ ...prev, printerKds: { ...prev.printerKds, autoPrint: e.target.checked } }))}
               className="w-4 h-4 accent-orange-600"
             />{" "}
             Auto-Print Order Baru
