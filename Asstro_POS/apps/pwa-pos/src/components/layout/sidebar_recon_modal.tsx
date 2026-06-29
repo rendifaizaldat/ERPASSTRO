@@ -14,10 +14,15 @@ interface SidebarReconModalProps {
   setShowReconModal: (show: boolean) => void;
   actualCash: string;
   setActualCash: (cash: string) => void;
+  actualNonCash: string;
+  setActualNonCash: (nonCash: string) => void;
   handleLogoutSubmit: (
     actualCash: number,
     systemCash: number,
     difference: number,
+    actualNonCash: number,
+    systemNonCash: number,
+    nonCashDifference: number,
     reason: string,
   ) => Promise<void>;
 }
@@ -27,6 +32,8 @@ export const SidebarReconModal = ({
   setShowReconModal,
   actualCash,
   setActualCash,
+  actualNonCash,
+  setActualNonCash,
   handleLogoutSubmit,
 }: SidebarReconModalProps) => {
   const { state, currentOperator } = usePos();
@@ -36,19 +43,22 @@ export const SidebarReconModal = ({
   const [reason, setReason] = useState("");
 
   // Membaca Kalkulasi langsung dari Projection
-  const calculations = state?.recon || {
+  const calculations = state?.recon as any || {
     systemCash: 0,
+    systemNonCash: 0,
     activeTables: 0,
     voidRefundCount: 0,
   };
 
   const actCashNum = Number(actualCash) || 0;
-  const difference = actCashNum - calculations.systemCash;
-  const isDiff = difference !== 0;
+  const actNonCashNum = Number(actualNonCash) || 0;
+  const difference = actCashNum - (calculations.systemCash || 0);
+  const nonCashDifference = actNonCashNum - (calculations.systemNonCash || 0);
+  const isDiff = difference !== 0 || nonCashDifference !== 0;
 
   const handleNextStep = () => {
-    if (!actualCash) {
-      showToast("Harap masukkan total fisik uang tunai di laci!", "ERROR");
+    if (!actualCash || !actualNonCash) {
+      showToast("Harap masukkan total fisik uang tunai dan non-tunai!", "ERROR");
       return;
     }
     setStep("CONFIRM");
@@ -67,11 +77,14 @@ export const SidebarReconModal = ({
       previousStaffId: currentOperator?.id || "UNKNOWN",
       previousStaffName: currentOperator?.name || "KASIR",
       actualCash: actCashNum,
-      systemCash: calculations.systemCash,
+      systemCash: calculations.systemCash || 0,
       difference: difference,
+      actualNonCash: actNonCashNum,
+      systemNonCash: calculations.systemNonCash || 0,
+      nonCashDifference: nonCashDifference,
       differenceReason: reason || "UANG SESUAI",
-      activeTablesCount: calculations.activeTables,
-      voidRefundCount: calculations.voidRefundCount,
+      activeTablesCount: calculations.activeTables || 0,
+      voidRefundCount: calculations.voidRefundCount || 0,
       timestamp: new Date().toISOString(),
     };
 
@@ -79,7 +92,15 @@ export const SidebarReconModal = ({
     localStorage.setItem("ASSTRO_HANDOVER_DATA", JSON.stringify(handoverData));
 
     // Eksekusi fungsi logout parent dengan data finansial lengkap
-    await handleLogoutSubmit(actCashNum, calculations.systemCash, difference, reason || "UANG SESUAI");
+    await handleLogoutSubmit(
+      actCashNum,
+      calculations.systemCash || 0,
+      difference,
+      actNonCashNum,
+      calculations.systemNonCash || 0,
+      nonCashDifference,
+      reason || "UANG SESUAI"
+    );
 
     // Reset internal state
     setStep("INPUT");
@@ -119,6 +140,22 @@ export const SidebarReconModal = ({
                   setActualCash(e.target.value.replace(/\D/g, ""))
                 }
                 placeholder="Masukkan total uang laci asli"
+                className="w-full px-4 py-3 bg-white border-2 border-slate-200 focus:border-red-500 rounded-xl text-lg font-black focus:outline-none transition-colors shadow-inner text-slate-900"
+              />
+            </div>
+
+            <div className="pt-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">
+                Total Non-Tunai Berdasarkan Settlement EDC/QRIS (Rp)
+              </label>
+              <input
+                type="text"
+                required
+                value={actualNonCash}
+                onChange={(e) =>
+                  setActualNonCash(e.target.value.replace(/\D/g, ""))
+                }
+                placeholder="Masukkan total non-tunai asli"
                 className="w-full px-4 py-3 bg-white border-2 border-slate-200 focus:border-red-500 rounded-xl text-lg font-black focus:outline-none transition-colors shadow-inner text-slate-900"
               />
             </div>
@@ -206,12 +243,29 @@ export const SidebarReconModal = ({
                 </span>
               </div>
 
+              <div className="flex justify-between items-center text-sm font-bold border-t border-dashed pt-2 mt-2 border-slate-300/50 text-slate-700">
+                <span>Input Kasir Non-Tunai:</span>
+                <span className="text-slate-900 font-black">
+                  Rp {actNonCashNum.toLocaleString("id-ID")}
+                </span>
+              </div>
+
               {isDiff && (
                 <div className="flex justify-between items-center text-sm font-bold text-amber-700 mt-1">
-                  <span>Selisih (Variance):</span>
+                  <span>Selisih Tunai (Variance):</span>
                   <span className="font-black">
                     {difference > 0 ? "+" : ""} Rp{" "}
                     {difference.toLocaleString("id-ID")}
+                  </span>
+                </div>
+              )}
+
+              {isDiff && (
+                <div className="flex justify-between items-center text-sm font-bold text-amber-700 mt-1">
+                  <span>Selisih Non-Tunai (Variance):</span>
+                  <span className="font-black">
+                    {nonCashDifference > 0 ? "+" : ""} Rp{" "}
+                    {nonCashDifference.toLocaleString("id-ID")}
                   </span>
                 </div>
               )}

@@ -22,8 +22,10 @@ export const usePosActions = (syncData: any) => {
 
   const updateSettings = async (settingsPayload: any) => {
     try {
+      const deviceId = localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN_DEVICE";
       await ledger.appendEvent("SETTINGS_UPDATED", {
         ...settingsPayload,
+        deviceId,
         operatorId: currentOperator?.id || "SYS",
         timestamp: Date.now(),
       });
@@ -318,6 +320,9 @@ export const usePosActions = (syncData: any) => {
     actualCash: number,
     systemCash: number,
     difference: number,
+    actualNonCash: number,
+    expectedNonCash: number,
+    nonCashDifference: number,
     differenceReason: string,
   ) => {
     try {
@@ -333,6 +338,9 @@ export const usePosActions = (syncData: any) => {
         expectedEndingCash: systemCash,
         actualEndingCash: actualCash,
         difference,
+        expectedNonCash,
+        actualNonCash,
+        nonCashDifference,
         differenceReason,
       });
       setCurrentOperator(null);
@@ -387,6 +395,36 @@ export const usePosActions = (syncData: any) => {
         timestamp: Date.now(),
         note: "Self-cleaning executed at End of Day",
       });
+
+      // True Data Purging Logic
+      const currentBusinessDate = localStorage.getItem("ASSTRO_BUSINESS_DATE") || new Date().toISOString().slice(0, 10);
+      const docs = await ledger.database.collections.events.find().exec();
+      const masterDataTypes = [
+        "PRODUCT_ADDED",
+        "PRODUCT_UPDATED",
+        "PRODUCT_DELETED",
+        "PRODUCT_STATUS_TOGGLED",
+        "CATEGORY_ADDED",
+        "CATEGORY_DELETED",
+        "TABLE_ADDED",
+        "TABLE_DELETED",
+        "TABLE_STATUS_TOGGLED",
+        "SETTINGS_UPDATED",
+        "MEMBER_REGISTERED",
+        "STAFF_REGISTERED",
+        "STAFF_UPDATED",
+        "STAFF_STATUS_TOGGLED",
+      ];
+
+      for (const doc of docs) {
+        const event = doc.toJSON();
+        if (!masterDataTypes.includes(event.type)) {
+          const eventBusinessDate = event.payload?.businessDate;
+          if (eventBusinessDate && eventBusinessDate < currentBusinessDate) {
+            await doc.remove();
+          }
+        }
+      }
 
       setCurrentOperator(null);
       setIsScreenLocked(true);

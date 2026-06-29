@@ -717,6 +717,7 @@ export class ProjectionEngine {
       },
       recon: {
         systemCash: 0,
+        systemNonCash: 0,
         activeTables: 0,
         voidRefundCount: 0,
       },
@@ -737,6 +738,7 @@ export class ProjectionEngine {
       const completedTransactions = this.transactions.filter((tx: any) => tx.status === "PAID" || tx.status === "COMPLETED" || !tx.status || tx.status !== "PENDING");
 
       let cashSales = 0;
+      let nonCashSales = 0;
       let totalGross = 0;
       let totalNet = 0;
       let totalTax = 0;
@@ -759,6 +761,8 @@ export class ProjectionEngine {
 
       if (method === "CASH" || method === "TUNAI") {
         cashSales += tx.grand_total || tx.amountPaid || 0;
+      } else {
+        nonCashSales += tx.grand_total || tx.amountPaid || 0;
       }
 
       (tx.items || []).forEach((item: any) => {
@@ -781,12 +785,20 @@ export class ProjectionEngine {
 
     let totalVoid = 0;
     let totalRefund = 0;
+    let totalNonCashRefund = 0;
     this.auditLogs.forEach((a: any) => {
       if (a.eventType === "ORDER_VOIDED") totalVoid += a.totalAmount || 0;
-      if (a.eventType === "PAYMENT_REFUNDED" || a.eventType === "ORDER_REFUNDED") totalRefund += a.totalAmount || 0;
+      if (a.eventType === "PAYMENT_REFUNDED" || a.eventType === "ORDER_REFUNDED") {
+        totalRefund += a.totalAmount || 0;
+        const method = (a.paymentMethod || a.method || "CASH").toUpperCase();
+        if (method !== "CASH" && method !== "TUNAI") {
+          totalNonCashRefund += a.totalAmount || 0;
+        }
+      }
     });
 
-    const systemCash = this.shiftInitialCash + cashSales - pettyCashOut - totalRefund;
+    const systemCash = this.shiftInitialCash + cashSales - pettyCashOut - (totalRefund - totalNonCashRefund);
+    const systemNonCash = nonCashSales - totalNonCashRefund;
 
     const pluMap: Record<string, { qty: number; total: number }> = {};
     completedTransactions.forEach((tx: any) => {
@@ -825,6 +837,7 @@ export class ProjectionEngine {
 
     const recon = {
       systemCash,
+      systemNonCash,
       activeTables,
       voidRefundCount: this.auditLogs.filter(log => log.eventType === "ORDER_VOIDED" || log.eventType === "ORDER_CANCELLED" || log.eventType === "PAYMENT_REFUNDED" || log.eventType === "ORDER_REFUNDED").length,
     };

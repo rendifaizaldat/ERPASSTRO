@@ -34,6 +34,7 @@ export interface SettingsState {
 
 export interface ReconProjection {
   systemCash: number;
+  systemNonCash: number;
   activeTables: number;
   voidRefundCount: number;
 }
