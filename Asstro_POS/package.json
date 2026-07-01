@@ -47,7 +47,8 @@
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
-    "vite-tsconfig-paths": "^6.1.1"
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
