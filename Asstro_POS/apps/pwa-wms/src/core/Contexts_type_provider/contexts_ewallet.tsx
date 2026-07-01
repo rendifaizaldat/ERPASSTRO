@@ -74,41 +74,26 @@ export function useEWallet(db: WmsDatabase | null, wmsState: WmsState | null) {
         const cleanLedgers = mapEWalletLedgers(response.ledgers || []);
 
         if (cleanAccounts.length > 0) {
-          for (const acc of cleanAccounts) {
-            try {
-              await db.wms_wallet_accounts.upsert(acc);
-            } catch (err) {
-              console.error(
-                `[RxDB_Error] Gagal upsert Account ID ${acc.id}:`,
-                err,
-              );
-            }
+          try {
+            await db.wms_wallet_accounts.bulkUpsert(cleanAccounts);
+          } catch (err) {
+            console.error(`[RxDB_Error] Gagal bulkUpsert Accounts:`, err);
           }
         }
 
         if (cleanConfigs.length > 0) {
-          for (const conf of cleanConfigs) {
-            try {
-              await db.wms_financial_configs.upsert(conf);
-            } catch (err) {
-              console.error(
-                `[RxDB_Error] Gagal upsert Config ID ${conf.branchId}:`,
-                err,
-              );
-            }
+          try {
+            await db.wms_financial_configs.bulkUpsert(cleanConfigs);
+          } catch (err) {
+            console.error(`[RxDB_Error] Gagal bulkUpsert Configs:`, err);
           }
         }
 
         if (cleanLedgers.length > 0) {
-          for (const ledger of cleanLedgers) {
-            try {
-              await db.wms_wallet_ledgers.upsert(ledger);
-            } catch (err) {
-              console.error(
-                `[RxDB_Error] Gagal upsert Ledger ID ${ledger.id}:`,
-                err,
-              );
-            }
+          try {
+            await db.wms_wallet_ledgers.bulkUpsert(cleanLedgers);
+          } catch (err) {
+            console.error(`[RxDB_Error] Gagal bulkUpsert Ledgers:`, err);
           }
         }
 
