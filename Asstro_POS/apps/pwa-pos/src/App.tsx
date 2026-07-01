@@ -10,6 +10,7 @@ import { LoginScreen } from "./features/auth/LoginScreen";
 import { errorBus } from "./core/instances";
 import { useToast } from "./components/Toast";
 import { ReauthModal } from "./components/modals/ReauthModal";
+import { printerService } from "./core/services/PrinterService";
 import { SecurityEnforcer } from "./components/shared/SecurityEnforcer";
 
 function AppContent() {
@@ -39,6 +40,26 @@ function AppContent() {
     window.addEventListener("REQUIRE_REAUTH", handleReauth);
     return () => window.removeEventListener("REQUIRE_REAUTH", handleReauth);
   }, []);
+
+  useEffect(() => {
+    const handleTestPrint = (e: any) => {
+      printerService.printReceipt({ test: true, message: "TEST PRINT SUCCESS" }, { printerSettings: e.detail.config });
+      showToast(`Test Print dikirim ke ${e.detail.target}`, "SUCCESS");
+    };
+
+    const handleThermalPrint = (e: any) => {
+      printerService.printReceipt(e.detail.payload, { printerSettings: e.detail.settings });
+    };
+
+    window.addEventListener("TEST_PRINT", handleTestPrint);
+    window.addEventListener("TRIGGER_THERMAL_PRINT", handleThermalPrint);
+
+    return () => {
+      window.removeEventListener("TEST_PRINT", handleTestPrint);
+      window.removeEventListener("TRIGGER_THERMAL_PRINT", handleThermalPrint);
+    };
+  }, [showToast]);
+
 
   useEffect(() => {
     const handleSyncError = (e: any) => {

@@ -78,7 +78,7 @@ async function processShiftEvent(entry: any) {
       .values({
         id: p.shiftId,
         branchId: branchId,
-        deviceId: "UNKNOWN-DEVICE", // Fallback jika insert dari closed
+        deviceId: p.deviceId || "UNKNOWN-DEVICE",
         cashierId: "UNKNOWN",
         openedAt: new Date(0), // Fallback
         closedAt: new Date(p.closedAt || Date.now()),

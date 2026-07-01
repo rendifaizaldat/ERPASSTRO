@@ -87,7 +87,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const dbProducts = state?.products || [];
   const dbTables = state?.tables || [];
 
-  const operatorObj = currentOperator!;
+  const operatorObj = currentOperator || { id: "SYS", name: "System" };
   const isWaiter =
     operatorObj.role === "WAITER" || operatorObj.role === "waiter";
 

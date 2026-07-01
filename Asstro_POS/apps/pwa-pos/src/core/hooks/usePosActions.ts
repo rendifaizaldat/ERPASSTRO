@@ -274,7 +274,7 @@ export const usePosActions = (syncData: any) => {
         const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
         const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
         const deviceId =
-          localStorage.getItem("ASSTRO_DEVICE_TOKEN") ||
+          localStorage.getItem("ASSTRO_DEVICE_ID") ||
           (state as any)?.settings?.sistem?.deviceId ||
           "UNKNOWN-DEVICE";
 
@@ -330,7 +330,9 @@ export const usePosActions = (syncData: any) => {
         localStorage.getItem("ASSTRO_CURRENT_SHIFT_ID") ||
         `SHIFT-UNTRACKED-${Date.now().toString(36).toUpperCase()}`;
 
+      const dId = localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
       await ledger.appendEvent("SHIFT_CLOSED", {
+        deviceId: dId,
         actual_cash: actualCash,
         system_cash: systemCash,
         shiftId,
@@ -370,7 +372,9 @@ export const usePosActions = (syncData: any) => {
         localStorage.getItem("ASSTRO_CURRENT_SHIFT_ID") ||
         `SHIFT-UNTRACKED-${Date.now().toString(36).toUpperCase()}`;
 
+      const dId = localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
       await ledger.appendEvent("SHIFT_CLOSED", {
+        deviceId: dId,
         shiftId,
         closedAt: new Date().toISOString(),
         expectedEndingCash: expectedCash,
@@ -622,6 +626,7 @@ export const usePosActions = (syncData: any) => {
       }
     } catch (err: any) {
       errorBus.next(`Gagal mengeksekusi penjualan: ${err.message}`);
+    throw err;
     }
   };
 
@@ -635,6 +640,7 @@ export const usePosActions = (syncData: any) => {
       eventBus.next(undefined as any);
     } catch (err: any) {
       errorBus.next(`Gagal memproses pembayaran meja: ${err.message}`);
+    throw err;
     }
   };
 
@@ -649,6 +655,7 @@ export const usePosActions = (syncData: any) => {
       eventBus.next(undefined as any);
     } catch (err: any) {
       errorBus.next(err.message);
+    throw err;
     }
   };
 

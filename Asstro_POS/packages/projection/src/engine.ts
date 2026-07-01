@@ -573,7 +573,7 @@ export class ProjectionEngine {
             this.activeOperator = found;
           }
         }
-        this.shiftInitialCash = payload.startingCash || payload.initial_cash || 0;
+        this.shiftInitialCash = Number(payload.startingCash || payload.initial_cash || 0);
         this.transactions = [];
         this.auditLogs = [];
         this.pettyCashTransactions = [];
