@@ -230,20 +230,22 @@ async function processSales(entry: any, js: any) {
         },
       });
     if (Array.isArray(p.items)) {
-      for (const refundItem of p.items) {
-        await db
-          .update(orderItems)
-          .set({
-            refundedQty: sql`refunded_qty + ${refundItem.qtyRefunded}`,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              sql`order_id IN (SELECT order_id FROM invoices WHERE id = ${targetInvoiceId})`,
-              eq(orderItems.skuSnapshot, refundItem.sku),
-            ),
-          );
-      }
+      await Promise.all(
+        p.items.map((refundItem: any) =>
+          db
+            .update(orderItems)
+            .set({
+              refundedQty: sql`refunded_qty + ${refundItem.qtyRefunded}`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                sql`order_id IN (SELECT order_id FROM invoices WHERE id = ${targetInvoiceId})`,
+                eq(orderItems.skuSnapshot, refundItem.sku),
+              ),
+            )
+        )
+      );
     }
 
     await db

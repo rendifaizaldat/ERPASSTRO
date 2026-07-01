@@ -30,11 +30,31 @@ export class PrinterService {
       const wsUrl = `ws://${printerIp}:8080/print?auth=${token}`;
 
       console.log(`Connecting to secure proxy at ${wsUrl}`);
-      // Simulate sending via websocket
       if (!navigator.onLine) throw new Error("Offline, queueing job");
 
+      const ws = new WebSocket(wsUrl);
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          ws.close();
+          reject(new Error("Timeout connecting to printer proxy"));
+        }, 5000);
+
+        ws.onopen = () => {
+          clearTimeout(timeout);
+          ws.send(JSON.stringify(payload));
+          ws.close();
+          resolve();
+        };
+
+        ws.onerror = (err) => {
+          clearTimeout(timeout);
+          reject(new Error("WebSocket error"));
+        };
+      });
+
       console.log("Sent job to proxy");
-      this.processQueue(profile); // Attempt to process queue
+      this.processQueue(profile);
     } catch (err) {
       console.log("Printer proxy unreachable or offline. Queueing...");
       this.offlineQueue.push({ type: "RECEIPT", payload, profile, timestamp: Date.now() });
@@ -53,7 +73,23 @@ export class PrinterService {
         const printerIp = job.profile?.printerSettings?.ip || "localhost";
         const wsUrl = `ws://${printerIp}:8080/print?auth=${token}`;
         console.log(`Sending queued job to ${wsUrl}`);
-        // Simulate websocket send
+        const ws = new WebSocket(wsUrl);
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error("Timeout"));
+          }, 5000);
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            ws.send(JSON.stringify(job.payload));
+            ws.close();
+            resolve();
+          };
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error("WS Error"));
+          };
+        });
       } catch (err) {
          remaining.push(job);
       }

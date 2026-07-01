@@ -332,6 +332,7 @@ export const SetupWizard: React.FC = () => {
 
       // Amankan Token baru sekarang, agar App.tsx belum trigger saat proses berjalan
       localStorage.setItem("ASSTRO_DEVICE_TOKEN", deviceToken);
+      localStorage.setItem("ASSTRO_DEVICE_ID", deviceId);
       localStorage.setItem("ASSTRO_BRANCH_ID", branchId);
       // Ensure ASSTRO_DEVICE_ID is persistently stored and adheres to a maximum 26 character limit (ULID standard)
       localStorage.setItem("ASSTRO_DEVICE_ID", deviceId.substring(0, 26));
