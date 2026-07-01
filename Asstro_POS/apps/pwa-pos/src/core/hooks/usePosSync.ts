@@ -79,6 +79,7 @@ export const usePosSync = () => {
     activeOrdersMap: new Map(),
     auditArr: [] as any[],
     activeOperatorIdFromLedger: null as string | null,
+    currentShiftInitialCash: 0 as number,
   });
 
   const getCombinedStaff = () => {
@@ -181,7 +182,7 @@ export const usePosSync = () => {
       if (a.type === "REFUND") totalRefund += a.totalAmount || 0;
     });
 
-    const initialCash = computedState.currentShiftInitialCash || 0;
+    const initialCash = Number(computedState.currentShiftInitialCash) || 0;
     const systemCash = initialCash + cashSales - pettyCashOut - totalRefund;
 
     const pluMap: Record<string, { qty: number; total: number }> = {};
@@ -225,9 +226,11 @@ export const usePosSync = () => {
   const processEvent = (ev: any, mem: typeof memRef.current) => {
     if (ev.type === "SHIFT_OPENED") {
       mem.activeOperatorIdFromLedger = ev.payload.operatorId;
+      mem.currentShiftInitialCash = Number(ev.payload.startingCash || ev.payload.initial_cash) || 0;
     }
     if (ev.type === "SHIFT_CLOSED" || ev.type === "END_OF_DAY_PROCESSED") {
       mem.activeOperatorIdFromLedger = null;
+      mem.currentShiftInitialCash = 0;
     }
     if (ev.type === "LOCAL_DATA_PURGED") {
       mem.txMap.clear();
@@ -235,6 +238,7 @@ export const usePosSync = () => {
       mem.activeOrdersMap.clear();
       mem.auditArr.length = 0;
       mem.activeOperatorIdFromLedger = null;
+      mem.currentShiftInitialCash = 0;
     }
 
     if (ev.type === "ORDER_CREATED" || ev.type === "ORDER_UPDATED") {
@@ -424,6 +428,7 @@ export const usePosSync = () => {
       );
     });
 
+    computedState.currentShiftInitialCash = mem.currentShiftInitialCash || 0;
     if (mem.activeOperatorIdFromLedger) {
       const foundStaff = combinedStaff.find(
         (s) => s.id === mem.activeOperatorIdFromLedger,
@@ -509,6 +514,7 @@ export const usePosSync = () => {
       memRef.current.activeOrdersMap.clear();
       memRef.current.auditArr = [];
       memRef.current.activeOperatorIdFromLedger = null;
+      memRef.current.currentShiftInitialCash = 0;
 
       events.forEach((ev) => processEvent(ev, memRef.current));
       buildAndSetState(memRef.current);

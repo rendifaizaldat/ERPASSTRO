@@ -332,6 +332,7 @@ export const SetupWizard: React.FC = () => {
 
       // Amankan Token baru sekarang, agar App.tsx belum trigger saat proses berjalan
       localStorage.setItem("ASSTRO_DEVICE_TOKEN", deviceToken);
+      localStorage.setItem("ASSTRO_DEVICE_ID", deviceId);
       localStorage.setItem("ASSTRO_BRANCH_ID", branchId);
 
       setIsRecoveryDone(true);
