@@ -59,12 +59,31 @@ export const exportLedgerToJson = async (branchId: string): Promise<void> => {
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
-    const a = document.createElement("a");
-    a.href = url;
-
     const dateStr = new Date().toISOString().slice(0, 10);
     const timeStr = new Date().toISOString().slice(11, 16).replace(":", "");
-    a.download = `Backup_EOD_${branchId}_${dateStr}_${timeStr}.json`;
+    const fileName = `Backup_EOD_${branchId}_${dateStr}_${timeStr}.json`;
+
+    // Attempt Web Share API first (crucial for Android/Tablets)
+    if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: "application/json" })] })) {
+      try {
+        const file = new File([blob], fileName, { type: "application/json" });
+        await navigator.share({
+          files: [file],
+          title: 'Asstro POS Backup EOD',
+          text: 'Backup transaksi harian (End of Day).',
+        });
+        console.log(`✅ [DISASTER RECOVERY] Berhasil membagikan file backup via Web Share API: ${fileName}`);
+        URL.revokeObjectURL(url);
+        return;
+      } catch (shareError) {
+        console.warn("Web Share API dibatalkan atau gagal, menggunakan metode fallback download...", shareError);
+      }
+    }
+
+    // Fallback: Standard Download
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
 
     document.body.appendChild(a);
     a.click();
@@ -73,7 +92,7 @@ export const exportLedgerToJson = async (branchId: string): Promise<void> => {
     URL.revokeObjectURL(url);
 
     console.log(
-      `✅ [DISASTER RECOVERY] Berhasil membuat file backup: ${a.download}`,
+      `✅ [DISASTER RECOVERY] Berhasil membuat file backup: ${fileName}`,
     );
   } catch (error) {
     console.error("Gagal mengekspor Ledger:", error);

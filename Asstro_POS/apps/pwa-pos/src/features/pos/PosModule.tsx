@@ -70,6 +70,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [activeDiscount, setActiveDiscount] = useState(0);
   const [showManagerPinModal, setShowManagerPinModal] = useState(false);
   const [managerPin, setManagerPin] = useState("");
+  const [authManagerId, setAuthManagerId] = useState<string | null>(null);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentType, setPaymentType] = useState<
@@ -285,9 +286,17 @@ export const PosModule: React.FC<PosModuleProps> = ({
     if (staffAuthorized || operatorAuthorized) {
       setActiveDiscount(Number(discountInput) || 0);
       setShowManagerPinModal(false);
+
+      if (operatorAuthorized) {
+        setAuthManagerId(currentOperator?.id || null);
+      } else {
+        const authorizedStaff = staffList.find((staff) => staff.pin === managerPin && (staff.role?.toUpperCase() === "MANAGER" || staff.role?.toUpperCase() === "SUPERADMIN"));
+        setAuthManagerId(authorizedStaff?.id || null);
+      }
     } else {
       showToast("PIN MANAJER SALAH! DISKON DITOLAK.", "ERROR");
       setManagerPin("");
+      setAuthManagerId(null);
     }
   };
 
@@ -531,6 +540,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
       const safeChangeAmount =
         actualPaymentMethod === "CASH" ? Math.round(calculatedChange) : 0;
 
+      const branchId = state?.branchId || state?.settings?.sistem?.cabangId || null;
+      if (!branchId) throw new Error("Branch ID is required but missing. Cannot proceed with transaction.");
+
       const enterprisePayload = {
         identity: {
           transaction_id: transactionId,
@@ -550,10 +562,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
             state?.companyName ||
             state?.settings?.sistem?.namaToko ||
             "ASSTRO HOLDING",
-          branchId:
-            state?.branchId ||
-            state?.settings?.sistem?.cabangId ||
-            "UNKNOWN_BRANCH",
+          branchId,
         },
         table_info: {
           table_id: selectedTable ? `TBL-${selectedTable}` : "N/A",
@@ -566,8 +575,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
           const prod = dbProducts.find((p: any) => p.sku === item.sku);
           const cat = dbCategories.find((c: any) => c.id === prod?.categoryId);
           const lineSubtotal = item.price * item.qty;
-          const itemTax = lineSubtotal * taxRate;
-          const itemService = lineSubtotal * serviceRate;
+          const itemTax = Math.round(lineSubtotal * taxRate);
+          const itemService = Math.round(lineSubtotal * serviceRate);
+
+          if (!cat?.id) throw new Error("Category ID missing for an item. Cannot proceed with transaction.");
 
           const safeItemId = item.id
             ? item.id.substring(0, 26)
@@ -578,7 +589,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
             product_id: prod?.id || `PRD-${item.sku}`,
             sku: item.sku,
             product_name: item.name,
-            category_id: cat?.id || "CAT-UNKNOWN",
+            category_id: cat?.id,
             category_name: cat?.name || "UNCATEGORIZED",
             qty: item.qty,
             selling_price: item.price,
@@ -615,7 +626,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
           waiter_name: isWaiter ? operatorObj.name : "Self-Order / Cashier",
           cashier_id: operatorObj.id,
           cashier_name: operatorObj.name,
-          supervisor_id: managerPin ? "SPV-AUTH" : undefined,
+          supervisor_id: managerPin ? (authManagerId || undefined) : undefined,
           shift_id: `SHIFT-${businessDate}`,
         },
         device: {
@@ -777,7 +788,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
             setPriveNote={setPriveNote}
             setShowPaymentModal={setShowPaymentModal}
             handleFinalCheckoutSubmit={handleFinalCheckoutSubmit}
-            activeOrderId={targetTableObj?.currentOrderId || targetTableObj?.lastOrderId || fallbackOrderId}
+            activeOrderId={targetTableObj?.currentOrderId || targetTableObj?.lastOrderId || sessionStorage.getItem(`asstro_order_id_${selectedTable}`)}
           />
         </ErrorBoundary>
       )}
