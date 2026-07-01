@@ -39,7 +39,7 @@ export const SupervisorModal: React.FC<SupervisorModalProps> = ({
             autoFocus
             value={managerPin}
             onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, ""))}
-            placeholder="PIN MANAGER (MOCK: 0000)"
+            placeholder="PIN MANAGER"
             className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-black tracking-widest text-base focus:outline-none"
           />
           <div className="flex gap-3">

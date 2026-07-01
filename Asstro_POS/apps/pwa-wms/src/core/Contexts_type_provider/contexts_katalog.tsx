@@ -122,39 +122,27 @@ export function useKatalog(db: WmsDatabase | null, isInitialized: boolean) {
         saveKatalogCache(data);
 
         if (data.vendors && data.vendors.length) {
-          for (let i = 0; i < data.vendors.length; i++) {
-            const vendor = data.vendors[i];
-            try {
-              await db.wms_vendors.upsert(vendor);
-            } catch (err) {}
-          }
+          try {
+            await db.wms_vendors.bulkUpsert(data.vendors);
+          } catch (err) {}
         }
 
         if (data.globalProducts && data.globalProducts.length) {
-          for (let i = 0; i < data.globalProducts.length; i++) {
-            const prod = data.globalProducts[i];
-            try {
-              await db.wms_global_products.upsert(prod);
-            } catch (err) {}
-          }
+          try {
+            await db.wms_global_products.bulkUpsert(data.globalProducts);
+          } catch (err) {}
         }
 
         if (data.regionalItems && data.regionalItems.length) {
-          for (let i = 0; i < data.regionalItems.length; i++) {
-            const item = data.regionalItems[i];
-            try {
-              await db.wms_regional_items.upsert(item);
-            } catch (err) {}
-          }
+          try {
+            await db.wms_regional_items.bulkUpsert(data.regionalItems);
+          } catch (err) {}
         }
 
         if (data.categories && data.categories.length) {
-          for (let i = 0; i < data.categories.length; i++) {
-            const cat = data.categories[i];
-            try {
-              await db.wms_categories.upsert(cat);
-            } catch (err) {}
-          }
+          try {
+            await db.wms_categories.bulkUpsert(data.categories);
+          } catch (err) {}
         }
 
         setRegions(data.regions || []);

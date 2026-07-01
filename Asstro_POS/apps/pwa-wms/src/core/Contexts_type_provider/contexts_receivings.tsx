@@ -40,7 +40,16 @@ export function useReceivings(
     if (!wmsState?.regionId || !db) return;
     try {
       // FIX: Potong URL agar base url bersih (contoh: http://localhost:4000)
-      const baseUrl = API_BASE_URL.split("/api")[0];
+      let baseUrl = "";
+      try {
+        const parsed = new URL(API_BASE_URL);
+        const apiIndex = parsed.pathname.indexOf("/api");
+        baseUrl = apiIndex !== -1
+          ? parsed.origin + parsed.pathname.substring(0, apiIndex)
+          : parsed.origin;
+      } catch {
+        baseUrl = API_BASE_URL.replace(/\/api(\/|$).*/, "");
+      }
       const targetUrl = `${baseUrl}/api/wms/receivings?regionId=${wmsState.regionId}`;
 
       const response = await fetch(targetUrl);

@@ -104,7 +104,7 @@ export const useReportCalculations = () => {
       if (a.type === "REFUND") totalRefund += a.totalAmount; // Asumsi refund ditarik tunai dari laci
     });
 
-    const initialCash = state?.currentShiftInitialCash || 0;
+    const initialCash = Number(state?.currentShiftInitialCash) || 0;
 
     // RUMUS MUTLAK KAS FISIK DI LACI:
     // Modal Awal + Pemasukan Tunai(Cash) - Kasbon - Refund Tunai

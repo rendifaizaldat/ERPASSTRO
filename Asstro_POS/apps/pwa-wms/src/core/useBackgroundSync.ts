@@ -38,7 +38,16 @@ export const useBackgroundSync = (
         .exec();
 
       if (pendingDocs.length > 0) {
-        const baseUrl = API_BASE_URL.split("/api")[0];
+        let baseUrl = "";
+        try {
+          const parsed = new URL(API_BASE_URL);
+          const apiIndex = parsed.pathname.indexOf("/api");
+          baseUrl = apiIndex !== -1
+            ? parsed.origin + parsed.pathname.substring(0, apiIndex)
+            : parsed.origin;
+        } catch {
+          baseUrl = API_BASE_URL.replace(/\/api(\/|$).*/, "");
+        }
         const UNIVERSAL_SYNC_URL = `${baseUrl}/api/wms/events`;
 
         for (const doc of pendingDocs) {
@@ -107,7 +116,16 @@ export const useBackgroundSync = (
     if (!wmsType) return; // Tunggu sampai state auth ready
 
     const roomIdentity = wmsType === "PUSAT" ? "PUSAT" : branchId;
-    const baseUrl = API_BASE_URL.split("/api")[0];
+    let baseUrl = "";
+    try {
+      const parsed = new URL(API_BASE_URL);
+      const apiIndex = parsed.pathname.indexOf("/api");
+      baseUrl = apiIndex !== -1
+        ? parsed.origin + parsed.pathname.substring(0, apiIndex)
+        : parsed.origin;
+    } catch {
+      baseUrl = API_BASE_URL.replace(/\/api(\/|$).*/, "");
+    }
 
     // AMBIL LANGSUNG DARI LOCALSTORAGE
     const deviceId =
