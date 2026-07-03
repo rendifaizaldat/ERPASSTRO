@@ -2,7 +2,7 @@
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
 
-dotenv.config({ path: "../../apps/backend/.env" }); // Arahkan ke env backend
+dotenv.config({ path: "../../apps/backend/.env" });
 
 let pool: Pool | null = null;
 let isPoolClosed = false;
@@ -80,7 +80,6 @@ export const dbChecker = {
   },
 
   async resetDatabase() {
-    // Sesuaikan dengan skenario reset Anda (misal truncate tabel transaksi)
     console.log("[DB] Mereset data transaksi server untuk audit...");
     await getPool().query("TRUNCATE transactions, journal, shifts CASCADE");
     console.log("[DB] Database Server bersih.");
