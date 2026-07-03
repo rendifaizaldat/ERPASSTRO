@@ -1,0 +1,12 @@
+# 1. Tandai semua perubahan baru / file baru
+git add .
+
+# 2. Kunci perubahan dengan catatan singkat
+git commit -m "update fitur X atau perbaikan bug Y"
+
+# 3. Lempar langsung ke GitHub
+git push
+
+npx tsx runner.ts
+
+api opus : sk-9674eda3abaf8ef-a3f236-48952e3d

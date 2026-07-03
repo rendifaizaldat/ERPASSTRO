@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { PosProvider } from "./core/PosProvider";
 import { ToastUniversalProvider } from "./components/Toast";
+import { ledger, projector } from "./core/instances";
 import "./index.css";
 
 // --- DEKLARASI TIPE UNTUK TYPESCRIPT ---
@@ -10,6 +11,10 @@ import "./index.css";
 declare global {
   interface Window {
     deferredPWAInstallPrompt: any;
+    __AUDITOR__?: {
+      ledger: typeof ledger;
+      projector: typeof projector;
+    };
   }
 }
 // ---------------------------------------
@@ -34,4 +39,9 @@ if (container) {
       </ToastUniversalProvider>
     </React.StrictMode>,
   );
+}
+
+// Expose auditor API only in development/testing
+if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+  (window as any).__AUDITOR__ = { ledger, projector };
 }

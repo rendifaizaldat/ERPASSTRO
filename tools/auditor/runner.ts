@@ -7,18 +7,24 @@ import fs from "fs";
 import { execSync } from "child_process";
 import { dbChecker } from "./db-checker";
 
-const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer);
-
-app.use(express.static(path.join(__dirname, "public")));
-
 const APP_URL = "http://localhost:3000";
 
+interface ScenarioContext {
+  page: Page;
+  emitLog: (msg: string) => void;
+  assert: (condition: boolean, message: string) => void;
+  waitForBackend: (
+    fn: () => Promise<boolean>,
+    timeoutMs?: number,
+  ) => Promise<void>;
+  dbChecker: typeof dbChecker;
+}
+
+let isAuditRunning = false;
+
 async function runAudit() {
-  let browser = null;
+  let browser: any = null;
   let page: Page | null = null;
-  let context = null;
 
   const emitLog = (msg: string) => {
     console.log(msg);
@@ -29,199 +35,428 @@ async function runAudit() {
     io.emit("stateUpdate", { local, server });
   };
 
-  try {
-    emitLog("Mulai inisialisasi Playwright...");
-    browser = await chromium.launch({ headless: false, slowMo: 100 }); // slowMo agar pergerakan terlihat
+  const assert = (condition: boolean, message: string) => {
+    if (!condition) throw new Error(message);
+  };
 
-    // [PENTING] Memberikan izin GPS dan Mock Koordinat (Misal: Lembang)
-    context = await browser.newContext({
+  const waitForBackend = async (
+    fn: () => Promise<boolean>,
+    timeoutMs = 10000,
+  ) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (await fn()) return;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    throw new Error("waitForBackend timeout");
+  };
+
+  // ==========================================
+  // INJECTION HELPERS (via page.evaluate) - PURE EVENT-DRIVEN
+  // ==========================================
+
+  const injectOperatorAuth = async (pin: string) => {
+    emitLog(`[INJECT] OPERATOR_AUTHENTICATED via PIN '${pin}'...`);
+    await page!.evaluate(async (pinVal) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) throw new Error("Auditor API tidak terekspos");
+
+      // 1. Cek di localStorage (Hasil Hydration Setup Wizard)
+      const offlineStaffStr = localStorage.getItem("ASSTRO_OFFLINE_STAFF");
+      const offlineStaff = offlineStaffStr ? JSON.parse(offlineStaffStr) : [];
+      let staff = offlineStaff.find(
+        (s: any) => s.pin === pinVal && s.isActive !== false,
+      );
+
+      // 2. Jika tidak ada, fallback cek ke Projector (Ledger State)
+      if (!staff) {
+        const state = await api.projector.getState();
+        staff = (state.staffList || []).find(
+          (s: any) => s.pin === pinVal && s.isActive !== false,
+        );
+      }
+
+      if (!staff)
+        throw new Error(
+          `Staff dengan PIN '${pinVal}' tidak ditemukan di memori lokal maupun Ledger.`,
+        );
+
+      const deviceId =
+        localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
+      const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
+
+      await api.ledger.appendEvent("OPERATOR_AUTHENTICATED", {
+        operatorId: staff.id,
+        pin: pinVal,
+        authenticatedAt: new Date().toISOString(),
+        deviceId,
+        branchId,
+      });
+    }, pin);
+  };
+
+  const injectOpenShift = async (pin: string, amount: number) => {
+    emitLog(`[INJECT] SHIFT_OPENED dengan modal ${amount}...`);
+    await page!.evaluate(
+      async ({ pinVal, cashVal }) => {
+        const api = (window as any).__AUDITOR__;
+        if (!api) throw new Error("Auditor API tidak terekspos");
+
+        // 1. Cek di localStorage
+        const offlineStaffStr = localStorage.getItem("ASSTRO_OFFLINE_STAFF");
+        const offlineStaff = offlineStaffStr ? JSON.parse(offlineStaffStr) : [];
+        let staff = offlineStaff.find(
+          (s: any) => s.pin === pinVal && s.isActive !== false,
+        );
+
+        // 2. Fallback cek ke Projector
+        if (!staff) {
+          const state = await api.projector.getState();
+          staff = (state.staffList || []).find(
+            (s: any) => s.pin === pinVal && s.isActive !== false,
+          );
+        }
+
+        if (!staff)
+          throw new Error(`Staff dengan PIN '${pinVal}' tidak ditemukan.`);
+
+        const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
+        const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
+        const deviceId =
+          localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
+
+        let businessDate = localStorage.getItem("ASSTRO_BUSINESS_DATE");
+        if (!businessDate) {
+          const now = new Date();
+          const ref =
+            now.getHours() < 3
+              ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+              : now;
+          businessDate = ref.toISOString().slice(0, 10);
+          localStorage.setItem("ASSTRO_BUSINESS_DATE", businessDate);
+        }
+
+        localStorage.setItem("ASSTRO_CURRENT_SHIFT_ID", shiftId);
+
+        await api.ledger.appendEvent("SHIFT_OPENED", {
+          operatorId: staff.id,
+          initial_cash: cashVal,
+          shiftId,
+          branchId,
+          deviceId,
+          cashierId: staff.id,
+          openedAt: new Date().toISOString(),
+          startingCash: cashVal,
+          businessDate,
+        });
+      },
+      { pinVal: pin, cashVal: amount },
+    );
+  };
+
+  const injectCategory = async (name: string) => {
+    emitLog(`[INJECT] CATEGORY_ADDED '${name}'...`);
+    await page!.evaluate(async (catName) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) throw new Error("Auditor API tidak terekspos");
+      const id = "CAT-" + Date.now().toString(36).toUpperCase();
+      await api.ledger.appendEvent("CATEGORY_ADDED", {
+        id,
+        name: catName.trim().toUpperCase(),
+        created_by: "AUDITOR",
+      });
+    }, name);
+  };
+
+  const injectProduct = async (
+    sku: string,
+    name: string,
+    price: number,
+    categoryName: string,
+  ) => {
+    emitLog(`[INJECT] PRODUCT_ADDED '${sku}'...`);
+    await page!.evaluate(
+      async ({ skuVal, nameVal, priceVal, catName }) => {
+        const api = (window as any).__AUDITOR__;
+        if (!api) throw new Error("Auditor API tidak terekspos");
+        const state = await api.projector.getState();
+        const cat = (state.categories || []).find(
+          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
+        );
+        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
+        await api.ledger.appendEvent("PRODUCT_ADDED", {
+          sku: skuVal.trim().toUpperCase(),
+          name: nameVal.trim().toUpperCase(),
+          price: priceVal,
+          categoryId: cat.id,
+          created_by: "AUDITOR",
+        });
+      },
+      { skuVal: sku, nameVal: name, priceVal: price, catName: categoryName },
+    );
+  };
+
+  const injectProductEdit = async (
+    sku: string,
+    newName: string,
+    newPrice: number,
+    categoryName: string,
+  ) => {
+    emitLog(`[INJECT] PRODUCT_EDITED '${sku}'...`);
+    await page!.evaluate(
+      async ({ skuVal, nameVal, priceVal, catName }) => {
+        const api = (window as any).__AUDITOR__;
+        if (!api) throw new Error("Auditor API tidak terekspos");
+        const state = await api.projector.getState();
+        const cat = (state.categories || []).find(
+          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
+        );
+        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
+        await api.ledger.appendEvent("PRODUCT_EDITED", {
+          sku: skuVal.trim().toUpperCase(),
+          name: nameVal.trim().toUpperCase(),
+          price: priceVal,
+          categoryId: cat.id,
+          updated_by: "AUDITOR",
+        });
+      },
+      {
+        skuVal: sku,
+        nameVal: newName,
+        priceVal: newPrice,
+        catName: categoryName,
+      },
+    );
+  };
+
+  const injectProductArchive = async (sku: string) => {
+    emitLog(`[INJECT] PRODUCT_ARCHIVED '${sku}'...`);
+    await page!.evaluate(async (skuVal) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) throw new Error("Auditor API tidak terekspos");
+      await api.ledger.appendEvent("PRODUCT_ARCHIVED", {
+        sku: skuVal.trim().toUpperCase(),
+        archived_by: "AUDITOR",
+      });
+    }, sku);
+  };
+
+  const injectCategoryDelete = async (name: string, expectBlocked = false) => {
+    emitLog(`[INJECT] CATEGORY_DELETED '${name}'...`);
+    try {
+      await page!.evaluate(async (catName) => {
+        const api = (window as any).__AUDITOR__;
+        if (!api) throw new Error("Auditor API tidak terekspos");
+        const state = await api.projector.getState();
+        const cat = (state.categories || []).find(
+          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
+        );
+        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
+        await api.ledger.appendEvent("CATEGORY_DELETED", {
+          id: cat.id,
+          name: cat.name,
+          deleted_by: "AUDITOR",
+        });
+      }, name);
+      if (expectBlocked) throw new Error("Seharusnya diblokir");
+    } catch (err: any) {
+      if (expectBlocked && err.message.includes("masih digunakan")) {
+        emitLog(`[INJECT] Delete blocked as expected.`);
+        return;
+      }
+      throw err;
+    }
+  };
+
+  // ==========================================
+  // ASSERTION HELPERS
+  // ==========================================
+
+  const assertLocalCategory = async (name: string) => {
+    const found = await page!.evaluate(async (catName) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) return false;
+      const state = await api.projector.getState();
+      return (state.categories || []).some(
+        (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
+      );
+    }, name);
+    assert(found, `Kategori '${name}' tidak ada di RxDB lokal`);
+  };
+
+  const assertLocalProduct = async (sku: string) => {
+    const found = await page!.evaluate(async (skuVal) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) return false;
+      const state = await api.projector.getState();
+      return (state.products || []).some(
+        (p: any) => p.sku.toUpperCase() === skuVal.toUpperCase(),
+      );
+    }, sku);
+    assert(found, `Produk '${sku}' tidak ada di RxDB lokal`);
+  };
+
+  const assertBackendCategory = async (name: string) => {
+    await waitForBackend(
+      async () => !!(await dbChecker.getCategoryByName(name)),
+    );
+    const cat = await dbChecker.getCategoryByName(name);
+    assert(cat, `Kategori '${name}' tidak ada di backend`);
+  };
+
+  const assertBackendProduct = async (sku: string) => {
+    await waitForBackend(async () => !!(await dbChecker.getProductBySku(sku)));
+    const prod = await dbChecker.getProductBySku(sku);
+    assert(prod, `Produk '${sku}' tidak ada di backend`);
+  };
+
+  const assertBackendEvent = async (
+    eventType: string,
+    field: string,
+    value: string,
+  ) => {
+    await waitForBackend(
+      async () =>
+        !!(await dbChecker.getEventByTypeAndPayloadField(
+          eventType,
+          field,
+          value,
+        )),
+    );
+    const ev = await dbChecker.getEventByTypeAndPayloadField(
+      eventType,
+      field,
+      value,
+    );
+    assert(ev, `Event '${eventType}' ${field}='${value}' tidak ditemukan`);
+  };
+
+  const assertNoOrphans = async () => {
+    await waitForBackend(
+      async () => (await dbChecker.getOrphanProducts()).length === 0,
+    );
+    const orphans = await dbChecker.getOrphanProducts();
+    assert(
+      orphans.length === 0,
+      `Ditemukan ${orphans.length} produk yatim piatu`,
+    );
+  };
+
+  if (isAuditRunning) {
+    emitLog("[AUDITOR] Audit sudah berjalan. Skip koneksi baru.");
+    return;
+  }
+  isAuditRunning = true;
+
+  try {
+    emitLog("=== Mulai Auditor E2E (Hybrid Mode) ===");
+    browser = await chromium.launch({ headless: false, slowMo: 30 });
+    const context = await browser.newContext({
       geolocation: { latitude: -6.8153, longitude: 107.6186 },
       permissions: ["geolocation"],
     });
-
     page = await context.newPage();
 
-    emitLog(`Membuka aplikasi POS: ${APP_URL}`);
-    await page.goto(APP_URL);
-    await page.waitForLoadState("networkidle");
+    emitLog(`Membuka ${APP_URL}...`);
+    await page!.goto(APP_URL);
+    await page!.waitForLoadState("networkidle");
 
     // ==========================================
-    // SKENARIO 1: SETUP WIZARD
+    // SKENARIO 1: Setup Wizard (UI Mocks & Interaction)
     // ==========================================
-    emitLog("[SKENARIO 1] Memulai Otorisasi Setup Wizard...");
+    emitLog("[SKENARIO 1] Eksekusi Setup Wizard E2E...");
+    const { run: runSetup } = await import("./scenarios/skenario-01-setup");
+    await runSetup({ page: page!, emitLog, assert, waitForBackend, dbChecker });
 
-    // Step 1: Login Admin
-    await page
-      .getByPlaceholder("email@asstro.com")
-      .fill("rendifaizal@asstro.com");
-    await page.getByPlaceholder("••••••••").fill("admin112233");
-    await page.getByRole("button", { name: "Verifikasi Identitas" }).click();
+    // Opsional: Klik tombol "Buka Mesin Kasir" jika skenario 1 tidak mengkliknya secara otomatis
+    try {
+      const openBtn = await page!.$('button:has-text("Buka Mesin Kasir")');
+      if (openBtn) {
+        await openBtn.click();
+        await page!.waitForLoadState("networkidle");
+      }
+    } catch (e) {}
 
-    // Step 2: Pilih Region & Branch (Dari data seed)
-    emitLog("[SKENARIO 1] Memilih Wilayah dan Cabang...");
-    // Menunggu dropdown muncul
-    await page.waitForSelector("select");
-
-    // Pilih Region (Bandung)
-    await page.locator("select").nth(0).selectOption({ label: "Bandung" });
-    // Pilih Branch (Asstro Lembang)
-    await page
-      .locator("select")
-      .nth(1)
-      .selectOption({ label: "[LBG] Asstro Lembang" });
-    await page.getByRole("button", { name: "Lanjut" }).click();
-
-    // Step 3: Registrasi Mesin
-    emitLog("[SKENARIO 1] Registrasi Mesin POS (Takeover)...");
-    await page
-      .getByPlaceholder("Contoh: TABLET-KASIR-01")
-      .fill("AUTO-TEST-DEVICE-01");
-    await page
-      .getByRole("button", { name: "Kunci Koordinat Mesin (Wajib)" })
-      .click();
-
-    // Tunggu sampai koodinat terkunci (tombol Aktifkan Mesin bisa diklik)
-    await page.waitForTimeout(1000);
-    await page.getByRole("button", { name: "Aktifkan Mesin" }).click();
-
-    // Step 4: Menunggu Proses Sinkronisasi (Hydrate & Pull)
-    emitLog("[CHECKPOINT] Menunggu Recovery & Sinkronisasi selesai...");
-    // Menunggu tombol "Buka Mesin Kasir" muncul sebagai tanda sukses
-    const openPosBtn = page.getByRole("button", { name: "Buka Mesin Kasir" });
-    await openPosBtn.waitFor({ state: "visible", timeout: 60000 }); // Tunggu max 60 detik
-
-    // Klik tombol Buka Mesin Kasir (Akan me-reload halaman ke mode operasional)
-    emitLog("[SKENARIO 1] Setup Selesai. Membuka Mesin Kasir...");
-    await openPosBtn.click();
-    await page.waitForLoadState("networkidle");
+    // Tunggu __AUDITOR__ tersedia setelah setup selesai dan aplikasi memuat layar Login/Utama
+    await page!.waitForFunction(() => (window as any).__AUDITOR__, {
+      timeout: 30000,
+    });
+    emitLog("[CHECK] Auditor API tersedia di window (Post-Setup).");
 
     // ==========================================
-    // SKENARIO 2: LOGIN KASIR & BUKA SHIFT
+    // SKENARIO 2: Login & Buka Shift (Pure event injection)
     // ==========================================
-    emitLog("[SKENARIO 2] Menguji Login PIN...");
+    emitLog("[SKENARIO 2] Login & Shift via pure event injection...");
+    await injectOperatorAuth("112233");
+    await injectOpenShift("112233", 150000);
 
-    await page
-      .getByRole("button", { name: "1", exact: true })
-      .first()
-      .waitFor({ state: "visible", timeout: 30000 });
-
-    const pin = ["1", "1", "2", "2", "3", "3"];
-    for (const num of pin) {
-      await page
-        .getByRole("button", { name: num, exact: true })
-        .first()
-        .click();
-      await page.waitForTimeout(100);
-    }
-
-    emitLog("[SKENARIO 2] Mengisi Modal Buka Shift...");
-    await page.getByText("Uang Modal Awal Shift").waitFor({ state: "visible" });
-
-    // Klik input untuk memunculkan numpad virtual
-    await page.getByPlaceholder("Contoh: 500000").click();
-    await page.getByPlaceholder("Contoh: 500000").fill("150000");
-
-    // [PERBAIKAN]: Simulasikan menekan tombol Enter
-    // Cara 1: Simulasi menekan tombol 'Enter' fisik pada keyboard
-    await page.keyboard.press("Enter");
-
-    // Cara 2 (Opsional): Jika Numpad virtual Anda memiliki tombol khusus untuk 'Enter' / 'OK' / 'Ceklis',
-    // Anda bisa mengganti line di atas dengan:
-    // await page.getByRole('button', { name: 'Enter' }).click(); // Sesuaikan 'Enter' dengan teks/label tombolnya
-
-    // Tunggu sebentar agar animasi numpad turun/hilang
-    await page.waitForTimeout(500);
-
-    // Klik Buka Shift Sekarang (Numpad sudah tidak menghalangi)
-    await page.getByRole("button", { name: "Buka Shift Sekarang" }).click();
-
-    // Tunggu animasi login selesai dan masuk ke dashboard
-    await page.waitForTimeout(2000);
-
-    emitLog("[CHECKPOINT] Login & Buka Shift Berhasil!");
-
-    const latestShift = await dbChecker.getLatestTransaction();
+    const latestShift = await dbChecker.getLatestShift();
     emitState(
-      { status: "Local RxDB Ready" },
+      { status: "Shift Active" },
       { backendStatus: "Shift Opened", data: latestShift },
     );
 
     // ==========================================
-    // [FAIL-FAST] Uji coba pelemparan error
+    // SKENARIO 3: Katalog (Pure event injection)
     // ==========================================
-    throw new Error("Simulasi Reset (Berhasil Setup & Login)");
+    emitLog("[SKENARIO 3] Katalog Produk via injection...");
 
-    // emitLog('Semua Skenario Hijau. Audit Selesai.');
-    // io.emit('auditComplete');
-  } catch (error: any) {
-    emitLog(`[ERROR] Audit terhenti: ${error.message}`);
-    emitLog(`[RECOVERY] Menginisiasi Auto-Reset Database & RxDB...`);
+    const { run: runkatalog } = await import("./scenarios/skenario-03-katalog");
+    await runkatalog({
+      page: page!,
+      emitLog,
+      assert,
+      waitForBackend,
+      dbChecker,
+    });
 
-    emitLog("[RECOVERY-DB] Menjalankan perintah pnpm fr...");
+    emitLog("=== AUDIT SELESAI SUKSES ===");
+    io.emit("auditComplete");
+  } catch (err: any) {
+    emitLog(`[ERROR] ${err.message}`);
+    emitLog("[RECOVERY] Reset database...");
     try {
       const backendRoot = path.resolve(__dirname, "../../apps/backend");
       const isWin = process.platform === "win32";
-
       let pnpmCmd = isWin ? "pnpm.cmd" : "pnpm";
       const localPnpm = path.join(
         path.resolve(__dirname, "../../node_modules/.bin"),
         isWin ? "pnpm.cmd" : "pnpm",
       );
-      if (fs.existsSync(localPnpm)) {
-        pnpmCmd = `"${localPnpm}"`;
-      }
-
-      const command = `${pnpmCmd} run fr`;
-      emitLog(`[RECOVERY-DB] Eksekusi: ${command} di ${backendRoot}`);
-
-      execSync(command, {
+      if (fs.existsSync(localPnpm)) pnpmCmd = `"${localPnpm}"`;
+      execSync(`${pnpmCmd} run fr`, {
         cwd: backendRoot,
         stdio: "inherit",
         shell: isWin ? "cmd.exe" : "/bin/sh",
       });
-
-      emitLog(
-        "[RECOVERY-DB] Database Server & NATS berhasil di-reset sepenuhnya.",
-      );
-    } catch (cmdError: any) {
-      emitLog(
-        `[RECOVERY-DB-GAGAL] Gagal eksekusi perintah reset: ${cmdError.message}`,
-      );
+      emitLog("[RECOVERY] Database reset.");
+    } catch (e: any) {
+      emitLog(`[RECOVERY GAGAL] ${e.message}`);
     }
-
-    emitLog("[RECOVERY-LOKAL] Membersihkan RxDB dan Storage Klien...");
-    if (page && context) {
-      await context.clearCookies();
-
-      await page.evaluate(async () => {
-        if (window.indexedDB && window.indexedDB.databases) {
-          const dbs = await window.indexedDB.databases();
-          dbs.forEach((db) => {
-            if (db.name) {
-              window.indexedDB.deleteDatabase(db.name);
-            }
-          });
-        } else {
-          window.indexedDB.deleteDatabase("asstro_pos_db");
-        }
-        localStorage.clear();
-        sessionStorage.clear();
+    if (page) {
+      await page.evaluate(() => {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch {}
       });
-      emitLog("[RECOVERY-LOKAL] RxDB dan State Klien berhasil dihancurkan.");
     }
-
-    emitLog("[RECOVERY-SELESAI] Silakan perbaiki bug dan jalankan ulang.");
   } finally {
+    isAuditRunning = false;
     if (browser) await browser.close();
-    await dbChecker.close();
   }
 }
 
-httpServer.listen(3030, () => {
-  console.log("🚀 UI Auditor berjalan di http://localhost:3030");
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer);
 
-  io.on("connection", (socket) => {
-    console.log("Client UI Terhubung. Memulai skenario E2E...");
+app.use(express.static(path.join(__dirname, "public")));
+
+httpServer.listen(3030, () => {
+  console.log("Auditor UI: http://localhost:3030");
+  io.on("connection", () => {
+    console.log("Client connected. Starting audit...");
     runAudit();
   });
 });

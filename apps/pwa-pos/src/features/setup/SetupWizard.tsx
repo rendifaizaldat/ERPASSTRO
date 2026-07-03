@@ -419,12 +419,12 @@ export const SetupWizard: React.FC = () => {
   const stepLabels = ["Otorisasi", "Cabang", "Registrasi", "Sinkronisasi"];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-6 font-sans antialiased">
+    <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 p-6 font-sans antialiased">
       <div className="w-full max-w-4xl mx-auto">
         {/* Main Card */}
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200/60 backdrop-blur-sm transition-all duration-300">
           {/* Header */}
-          <div className="px-8 pt-8 pb-6 border-b border-slate-100 bg-gradient-to-r from-white to-orange-50/30">
+          <div className="px-8 pt-8 pb-6 border-b border-slate-100 bg-linear-to-r from-white to-orange-50/30">
             <div className="flex items-center gap-4">
               <div className="bg-orange-600 text-white w-14 h-14 flex items-center justify-center rounded-2xl font-black italic text-2xl shadow-lg shadow-orange-700/30 shrink-0">
                 AS
@@ -904,7 +904,7 @@ export const SetupWizard: React.FC = () => {
                       </div>
                     )}
                     {logs.map((log, idx) => (
-                      <div key={idx} className="mb-0.5 break-words">
+                      <div key={idx} className="mb-0.5 wrap-break-word">
                         <span className="text-slate-500 select-none">
                           {"> "}
                         </span>

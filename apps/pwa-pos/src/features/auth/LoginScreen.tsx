@@ -313,7 +313,7 @@ export const LoginScreen: React.FC = () => {
                     Catatan Kebijakan:
                   </span>
                   <span
-                    className="text-slate-700 uppercase max-w-[150px] truncate"
+                    className="text-slate-700 uppercase max-w-37.5 truncate"
                     title={handoverData.differenceReason}
                   >
                     {handoverData.differenceReason}

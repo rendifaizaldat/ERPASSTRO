@@ -290,7 +290,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
       if (operatorAuthorized) {
         setAuthManagerId(currentOperator?.id || null);
       } else {
-        const authorizedStaff = staffList.find((staff) => staff.pin === managerPin && (staff.role?.toUpperCase() === "MANAGER" || staff.role?.toUpperCase() === "SUPERADMIN"));
+        const authorizedStaff = staffList.find(
+          (staff) =>
+            staff.pin === managerPin &&
+            (staff.role?.toUpperCase() === "MANAGER" ||
+              staff.role?.toUpperCase() === "SUPERADMIN"),
+        );
         setAuthManagerId(authorizedStaff?.id || null);
       }
     } else {
@@ -540,8 +545,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
       const safeChangeAmount =
         actualPaymentMethod === "CASH" ? Math.round(calculatedChange) : 0;
 
-      const branchId = state?.branchId || state?.settings?.sistem?.cabangId || null;
-      if (!branchId) throw new Error("Branch ID is required but missing. Cannot proceed with transaction.");
+      const branchId =
+        state?.branchId || state?.settings?.sistem?.cabangId || null;
+      if (!branchId)
+        throw new Error(
+          "Branch ID is required but missing. Cannot proceed with transaction.",
+        );
 
       const enterprisePayload = {
         identity: {
@@ -578,7 +587,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
           const itemTax = Math.round(lineSubtotal * taxRate);
           const itemService = Math.round(lineSubtotal * serviceRate);
 
-          if (!cat?.id) throw new Error("Category ID missing for an item. Cannot proceed with transaction.");
+          if (!cat?.id)
+            throw new Error(
+              "Category ID missing for an item. Cannot proceed with transaction.",
+            );
 
           const safeItemId = item.id
             ? item.id.substring(0, 26)
@@ -626,7 +638,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
           waiter_name: isWaiter ? operatorObj.name : "Self-Order / Cashier",
           cashier_id: operatorObj.id,
           cashier_name: operatorObj.name,
-          supervisor_id: managerPin ? (authManagerId || undefined) : undefined,
+          supervisor_id: managerPin ? authManagerId || undefined : undefined,
           shift_id: `SHIFT-${businessDate}`,
         },
         device: {
@@ -768,7 +780,15 @@ export const PosModule: React.FC<PosModuleProps> = ({
         />
       </div>
       {showPaymentModal && (
-        <ErrorBoundary fallback={<div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center backdrop-blur-sm p-4"><div className="bg-white p-6 rounded-3xl">State tidak siap, harap refresh.</div></div>}>
+        <ErrorBoundary
+          fallback={
+            <div className="fixed inset-0 z-100 bg-black/60 flex items-center justify-center backdrop-blur-sm p-4">
+              <div className="bg-white p-6 rounded-3xl">
+                State tidak siap, harap refresh.
+              </div>
+            </div>
+          }
+        >
           <BillingModal
             selectedTable={selectedTable}
             cart={cart}
@@ -788,7 +808,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
             setPriveNote={setPriveNote}
             setShowPaymentModal={setShowPaymentModal}
             handleFinalCheckoutSubmit={handleFinalCheckoutSubmit}
-            activeOrderId={targetTableObj?.currentOrderId || targetTableObj?.lastOrderId || sessionStorage.getItem(`asstro_order_id_${selectedTable}`)}
+            activeOrderId={
+              targetTableObj?.currentOrderId ||
+              targetTableObj?.lastOrderId ||
+              sessionStorage.getItem(`asstro_order_id_${selectedTable}`)
+            }
           />
         </ErrorBoundary>
       )}
