@@ -9,7 +9,7 @@ import { dbChecker } from "./db-checker";
 
 const APP_URL = "http://localhost:3000";
 
-interface ScenarioContext {
+export interface ScenarioContext {
   page: Page;
   emitLog: (msg: string) => void;
   assert: (condition: boolean, message: string) => void;
@@ -18,6 +18,10 @@ interface ScenarioContext {
     timeoutMs?: number,
   ) => Promise<void>;
   dbChecker: typeof dbChecker;
+  getLocalAndServerState: () => Promise<{ local: any, server: any }>;
+  injectAction: (eventType: string, payload: any) => Promise<void>;
+  assertDataState: (pre: any, post: any, label: string) => void;
+  emitState: (phase: "PRE" | "POST", label: string, local: any, server: any) => void;
 }
 
 let isAuditRunning = false;
@@ -40,6 +44,99 @@ async function runAudit() {
     io.emit("stateUpdate", { phase, label: actionLabel, local, server });
   };
 
+  const getLocalAndServerState = async () => {
+    const local = await page!.evaluate(async () => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) return {};
+      const state = await api.projector.getState();
+      return state;
+    });
+
+    const server = await dbChecker.getServerState();
+    return { local, server };
+  };
+
+  const injectAction = async (eventType: string, payload: any) => {
+    emitLog(`[INJECT] ${eventType}...`);
+    await page!.evaluate(async ({ eventTypeVal, payloadVal }) => {
+      const api = (window as any).__AUDITOR__;
+      if (!api) throw new Error("Auditor API tidak terekspos");
+
+      const payloadCopy = { ...payloadVal };
+      if (!payloadCopy.deviceId) {
+        payloadCopy.deviceId = localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
+      }
+      if (!payloadCopy.branchId) {
+        payloadCopy.branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
+      }
+      if (!payloadCopy.businessDate) {
+        payloadCopy.businessDate = localStorage.getItem("ASSTRO_BUSINESS_DATE") || new Date().toISOString().slice(0, 10);
+      }
+
+      await api.ledger.appendEvent(eventTypeVal, payloadCopy);
+    }, { eventTypeVal: eventType, payloadVal: payload });
+  };
+
+  const assertDataState = (pre: any, post: any, label: string) => {
+    emitLog(`[ASSERT] Membandingkan state untuk ${label}...`);
+    emitState("PRE", label, pre.local, pre.server);
+    emitState("POST", label, post.local, post.server);
+
+    const serverChanges: string[] = [];
+    const localChanges: string[] = [];
+
+    // Helper for deep comparison
+    const compareObjects = (preObj: any, postObj: any, prefix: string, changesArr: string[]) => {
+      if (!preObj && !postObj) return;
+      if (!preObj && postObj) {
+         changesArr.push(`[BARU] Data ditambahkan pada ${prefix}`);
+         return;
+      }
+      if (preObj && !postObj) {
+         changesArr.push(`[HAPUS] Data dihapus dari ${prefix}`);
+         return;
+      }
+
+      if (Array.isArray(preObj) && Array.isArray(postObj)) {
+         if (postObj.length > preObj.length) {
+            changesArr.push(`[INSERT] ${postObj.length - preObj.length} baris ditambahkan ke ${prefix}.`);
+         } else if (postObj.length < preObj.length) {
+            changesArr.push(`[DELETE] ${preObj.length - postObj.length} baris dihapus dari ${prefix}.`);
+         }
+      } else if (typeof preObj === 'object' && typeof postObj === 'object') {
+         const keys = new Set([...Object.keys(preObj), ...Object.keys(postObj)]);
+         for (const key of keys) {
+            if (preObj[key] !== postObj[key]) {
+               const preVal = typeof preObj[key] === 'object' ? JSON.stringify(preObj[key]) : preObj[key];
+               const postVal = typeof postObj[key] === 'object' ? JSON.stringify(postObj[key]) : postObj[key];
+               changesArr.push(`[UPDATE] Kolom ${prefix}.${key} berubah dari '${preVal}' menjadi '${postVal}'.`);
+            }
+         }
+      }
+    };
+
+    // Compare Server State (Backend)
+    if (pre.server && post.server) {
+      if (pre.server.shifts && post.server.shifts) compareObjects(pre.server.shifts, post.server.shifts, "PgSQL.shifts", serverChanges);
+      if (pre.server.categories && post.server.categories) compareObjects(pre.server.categories, post.server.categories, "PgSQL.categories", serverChanges);
+      if (pre.server.products && post.server.products) compareObjects(pre.server.products, post.server.products, "PgSQL.products", serverChanges);
+      if (pre.server.journal && post.server.journal) compareObjects(pre.server.journal, post.server.journal, "PgSQL.journal", serverChanges);
+    }
+
+    // Compare Local State (RxDB)
+    if (pre.local && post.local) {
+       compareObjects(pre.local, post.local, "RxDB", localChanges);
+    }
+
+    const diff = {
+      label,
+      localChanges,
+      serverChanges,
+    };
+
+    io.emit("diffUpdate", diff);
+  };
+
   const assert = (condition: boolean, message: string) => {
     if (!condition) throw new Error(message);
   };
@@ -56,296 +153,27 @@ async function runAudit() {
     throw new Error("waitForBackend timeout");
   };
 
+
   // ==========================================
   // INJECTION HELPERS (via page.evaluate) - PURE EVENT-DRIVEN
   // ==========================================
 
-  const injectOperatorAuth = async (pin: string) => {
-    emitLog(`[INJECT] OPERATOR_AUTHENTICATED via PIN '${pin}'...`);
-    await page!.evaluate(async (pinVal) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
 
-      // 1. Cek di localStorage (Hasil Hydration Setup Wizard)
-      const offlineStaffStr = localStorage.getItem("ASSTRO_OFFLINE_STAFF");
-      const offlineStaff = offlineStaffStr ? JSON.parse(offlineStaffStr) : [];
-      let staff = offlineStaff.find(
-        (s: any) => s.pin === pinVal && s.isActive !== false,
-      );
 
-      // 2. Jika tidak ada, fallback cek ke Projector (Ledger State)
-      if (!staff) {
-        const state = await api.projector.getState();
-        staff = (state.staffList || []).find(
-          (s: any) => s.pin === pinVal && s.isActive !== false,
-        );
-      }
 
-      if (!staff)
-        throw new Error(
-          `Staff dengan PIN '${pinVal}' tidak ditemukan di memori lokal maupun Ledger.`,
-        );
 
-      const deviceId =
-        localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
-      const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
 
-      await api.ledger.appendEvent("OPERATOR_AUTHENTICATED", {
-        operatorId: staff.id,
-        pin: pinVal,
-        authenticatedAt: new Date().toISOString(),
-        deviceId,
-        branchId,
-      });
-    }, pin);
-  };
 
-  const injectOpenShift = async (pin: string, amount: number) => {
-    emitLog(`[INJECT] SHIFT_OPENED dengan modal ${amount}...`);
-    await page!.evaluate(
-      async ({ pinVal, cashVal }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-
-        // 1. Cek di localStorage
-        const offlineStaffStr = localStorage.getItem("ASSTRO_OFFLINE_STAFF");
-        const offlineStaff = offlineStaffStr ? JSON.parse(offlineStaffStr) : [];
-        let staff = offlineStaff.find(
-          (s: any) => s.pin === pinVal && s.isActive !== false,
-        );
-
-        // 2. Fallback cek ke Projector
-        if (!staff) {
-          const state = await api.projector.getState();
-          staff = (state.staffList || []).find(
-            (s: any) => s.pin === pinVal && s.isActive !== false,
-          );
-        }
-
-        if (!staff)
-          throw new Error(`Staff dengan PIN '${pinVal}' tidak ditemukan.`);
-
-        const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
-        const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
-        const deviceId =
-          localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
-
-        let businessDate = localStorage.getItem("ASSTRO_BUSINESS_DATE");
-        if (!businessDate) {
-          const now = new Date();
-          const ref =
-            now.getHours() < 3
-              ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-              : now;
-          businessDate = ref.toISOString().slice(0, 10);
-          localStorage.setItem("ASSTRO_BUSINESS_DATE", businessDate);
-        }
-
-        localStorage.setItem("ASSTRO_CURRENT_SHIFT_ID", shiftId);
-
-        await api.ledger.appendEvent("SHIFT_OPENED", {
-          operatorId: staff.id,
-          initial_cash: cashVal,
-          shiftId,
-          branchId,
-          deviceId,
-          cashierId: staff.id,
-          openedAt: new Date().toISOString(),
-          startingCash: cashVal,
-          businessDate,
-        });
-      },
-      { pinVal: pin, cashVal: amount },
-    );
-  };
-
-  const injectCategory = async (name: string) => {
-    emitLog(`[INJECT] CATEGORY_ADDED '${name}'...`);
-    await page!.evaluate(async (catName) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
-      const id = "CAT-" + Date.now().toString(36).toUpperCase();
-      await api.ledger.appendEvent("CATEGORY_ADDED", {
-        id,
-        name: catName.trim().toUpperCase(),
-        created_by: "AUDITOR",
-      });
-    }, name);
-  };
-
-  const injectProduct = async (
-    sku: string,
-    name: string,
-    price: number,
-    categoryName: string,
-  ) => {
-    emitLog(`[INJECT] PRODUCT_ADDED '${sku}'...`);
-    await page!.evaluate(
-      async ({ skuVal, nameVal, priceVal, catName }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("PRODUCT_ADDED", {
-          sku: skuVal.trim().toUpperCase(),
-          name: nameVal.trim().toUpperCase(),
-          price: priceVal,
-          categoryId: cat.id,
-          created_by: "AUDITOR",
-        });
-      },
-      { skuVal: sku, nameVal: name, priceVal: price, catName: categoryName },
-    );
-  };
-
-  const injectProductEdit = async (
-    sku: string,
-    newName: string,
-    newPrice: number,
-    categoryName: string,
-  ) => {
-    emitLog(`[INJECT] PRODUCT_EDITED '${sku}'...`);
-    await page!.evaluate(
-      async ({ skuVal, nameVal, priceVal, catName }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("PRODUCT_EDITED", {
-          sku: skuVal.trim().toUpperCase(),
-          name: nameVal.trim().toUpperCase(),
-          price: priceVal,
-          categoryId: cat.id,
-          updated_by: "AUDITOR",
-        });
-      },
-      {
-        skuVal: sku,
-        nameVal: newName,
-        priceVal: newPrice,
-        catName: categoryName,
-      },
-    );
-  };
-
-  const injectProductArchive = async (sku: string) => {
-    emitLog(`[INJECT] PRODUCT_ARCHIVED '${sku}'...`);
-    await page!.evaluate(async (skuVal) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
-      await api.ledger.appendEvent("PRODUCT_ARCHIVED", {
-        sku: skuVal.trim().toUpperCase(),
-        archived_by: "AUDITOR",
-      });
-    }, sku);
-  };
-
-  const injectCategoryDelete = async (name: string, expectBlocked = false) => {
-    emitLog(`[INJECT] CATEGORY_DELETED '${name}'...`);
-    try {
-      await page!.evaluate(async (catName) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("CATEGORY_DELETED", {
-          id: cat.id,
-          name: cat.name,
-          deleted_by: "AUDITOR",
-        });
-      }, name);
-      if (expectBlocked) throw new Error("Seharusnya diblokir");
-    } catch (err: any) {
-      if (expectBlocked && err.message.includes("masih digunakan")) {
-        emitLog(`[INJECT] Delete blocked as expected.`);
-        return;
-      }
-      throw err;
-    }
-  };
 
   // ==========================================
   // ASSERTION HELPERS
   // ==========================================
 
-  const assertLocalCategory = async (name: string) => {
-    const found = await page!.evaluate(async (catName) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) return false;
-      const state = await api.projector.getState();
-      return (state.categories || []).some(
-        (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-      );
-    }, name);
-    assert(found, `Kategori '${name}' tidak ada di RxDB lokal`);
-  };
 
-  const assertLocalProduct = async (sku: string) => {
-    const found = await page!.evaluate(async (skuVal) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) return false;
-      const state = await api.projector.getState();
-      return (state.products || []).some(
-        (p: any) => p.sku.toUpperCase() === skuVal.toUpperCase(),
-      );
-    }, sku);
-    assert(found, `Produk '${sku}' tidak ada di RxDB lokal`);
-  };
 
-  const assertBackendCategory = async (name: string) => {
-    await waitForBackend(
-      async () => !!(await dbChecker.getCategoryByName(name)),
-    );
-    const cat = await dbChecker.getCategoryByName(name);
-    assert(cat, `Kategori '${name}' tidak ada di backend`);
-  };
 
-  const assertBackendProduct = async (sku: string) => {
-    await waitForBackend(async () => !!(await dbChecker.getProductBySku(sku)));
-    const prod = await dbChecker.getProductBySku(sku);
-    assert(prod, `Produk '${sku}' tidak ada di backend`);
-  };
 
-  const assertBackendEvent = async (
-    eventType: string,
-    field: string,
-    value: string,
-  ) => {
-    await waitForBackend(
-      async () =>
-        !!(await dbChecker.getEventByTypeAndPayloadField(
-          eventType,
-          field,
-          value,
-        )),
-    );
-    const ev = await dbChecker.getEventByTypeAndPayloadField(
-      eventType,
-      field,
-      value,
-    );
-    assert(ev, `Event '${eventType}' ${field}='${value}' tidak ditemukan`);
-  };
 
-  const assertNoOrphans = async () => {
-    await waitForBackend(
-      async () => (await dbChecker.getOrphanProducts()).length === 0,
-    );
-    const orphans = await dbChecker.getOrphanProducts();
-    assert(
-      orphans.length === 0,
-      `Ditemukan ${orphans.length} produk yatim piatu`,
-    );
-  };
 
   if (isAuditRunning) {
     emitLog("[AUDITOR] Audit sudah berjalan. Skip koneksi baru.");
@@ -371,7 +199,7 @@ async function runAudit() {
     // ==========================================
     emitLog("[SKENARIO 1] Eksekusi Setup Wizard E2E...");
     const { run: runSetup } = await import("./scenarios/skenario-01-setup");
-    await runSetup({ page: page!, emitLog, assert, waitForBackend, dbChecker });
+    await runSetup({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, emitState, assertDataState });
 
     // Opsional: Klik tombol "Buka Mesin Kasir" jika skenario 1 tidak mengkliknya secara otomatis
     try {
@@ -393,71 +221,20 @@ async function runAudit() {
     // ==========================================
     emitLog("[SKENARIO 2] Login & Shift via pure event injection...");
 
-    // 1. SNAPSHOT PRE-STATE (Sebelum Aksi)
-    const preServerShift = (await dbChecker.getLatestShift()) || {};
-    const preLocalShift = await page!.evaluate(async () => {
-      const shiftId = localStorage.getItem("ASSTRO_CURRENT_SHIFT_ID");
-      return shiftId
-        ? { id: shiftId, status: "Shift sisa pengujian sebelumnya" }
-        : {};
+
+    const { run: runShift } = await import("./scenarios/skenario-02-shift");
+    await runShift({
+      page: page!,
+      emitLog,
+      assert,
+      waitForBackend,
+      dbChecker,
+      getLocalAndServerState,
+      injectAction,
+      assertDataState,
+      emitState
     });
 
-    emitState(
-      "PRE",
-      "Skenario 2: Login & Buka Shift",
-      preLocalShift,
-      preServerShift,
-    );
-
-    // 2. EKSEKUSI VIRTUAL AKSI
-    await injectOperatorAuth("112233");
-    await injectOpenShift("112233", 150000); // Modal awal 150.000
-
-    // 3. TUNGGU SINKRONISASI KE BACKEND (Sangat Krusial!)
-    emitLog("  -> Menunggu Background Sync mengirim data Shift ke Server...");
-    await waitForBackend(async () => {
-      const shift = await dbChecker.getLatestShift();
-      // Pastikan data tidak null dan modal awalnya sesuai dengan yang kita inject
-      return shift !== null && Number(shift.starting_cash) === 150000;
-    }, 15000); // Maksimal tunggu 15 detik
-
-    // 4. SNAPSHOT POST-STATE (Sesudah Aksi)
-    const postServerShift = (await dbChecker.getLatestShift()) || {};
-
-    const postLocalShift = await page!.evaluate(async () => {
-      try {
-        const api = (window as any).__AUDITOR__;
-        const shiftId = localStorage.getItem("ASSTRO_CURRENT_SHIFT_ID");
-
-        if (!api) return { error: "Auditor API tidak terekspos" };
-        if (!shiftId)
-          return { error: "Shift ID tidak ditemukan di localStorage" };
-
-        // Membaca langsung dari RxDB Lokal (Skema pos_shifts)
-        if (api.rxdb && api.rxdb.shifts) {
-          const shiftDoc = await api.rxdb.shifts.findOne(shiftId).exec();
-          if (shiftDoc) return shiftDoc.toJSON();
-        }
-
-        // Fallback jika rxdb tidak di-ekspos, ambil dari state projector
-        const state = await api.projector.getState();
-        return (
-          state.currentShift || {
-            id: shiftId,
-            note: "RxDB.shifts belum terekspos di window.__AUDITOR__",
-          }
-        );
-      } catch (err: any) {
-        return { error: err.message };
-      }
-    });
-
-    emitState(
-      "POST",
-      "Skenario 2: Login & Buka Shift",
-      postLocalShift,
-      postServerShift,
-    );
     // ==========================================
     // SKENARIO 3: Katalog (Pure event injection)
     // ==========================================
@@ -470,9 +247,72 @@ async function runAudit() {
       assert,
       waitForBackend,
       dbChecker,
+      getLocalAndServerState,
+      injectAction,
+      assertDataState,
+      emitState
     });
 
+
+    // ==========================================
+    // SKENARIO 4: Alur Kerja Pesanan
+    // ==========================================
+    emitLog("[SKENARIO 4] Memulai Order Workflow...");
+    const { run: runOrder } = await import("./scenarios/skenario-04-order");
+    await runOrder({
+      page: page!,
+      emitLog,
+      assert,
+      waitForBackend,
+      dbChecker,
+      getLocalAndServerState,
+      injectAction,
+      assertDataState,
+      emitState
+    });
+
+
+    // ==========================================
+    // SKENARIO 5-13
+    // ==========================================
+    emitLog("[SKENARIO 5] Memulai Payment Workflow...");
+    const { run: runPayment } = await import("./scenarios/skenario-05-payment");
+    await runPayment({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 6] Memulai Reservation Workflow...");
+    const { run: runReservation } = await import("./scenarios/skenario-06-reservasi");
+    await runReservation({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 7] Memulai Void Workflow...");
+    const { run: runVoid } = await import("./scenarios/skenario-07-void");
+    await runVoid({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 8] Memulai Table Movement Workflow...");
+    const { run: runTable } = await import("./scenarios/skenario-08-table");
+    await runTable({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 9] Memulai Refund Workflow...");
+    const { run: runRefund } = await import("./scenarios/skenario-09-refund");
+    await runRefund({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 10] Memulai Settings Workflow...");
+    const { run: runSettings } = await import("./scenarios/skenario-10-settings");
+    await runSettings({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 11] Memulai Handover Workflow...");
+    const { run: runHandover } = await import("./scenarios/skenario-11-handover");
+    await runHandover({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 12] Memulai Recovery Workflow...");
+    const { run: runRecovery } = await import("./scenarios/skenario-12-recovery");
+    await runRecovery({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
+    emitLog("[SKENARIO 13] Memulai EOD Workflow...");
+    const { run: runEod } = await import("./scenarios/skenario-13-eod");
+    await runEod({ page: page!, emitLog, assert, waitForBackend, dbChecker, getLocalAndServerState, injectAction, assertDataState, emitState });
+
     emitLog("=== AUDIT SELESAI SUKSES ===");
+
     io.emit("auditComplete");
   } catch (err: any) {
     emitLog(`[ERROR] ${err.message}`);

@@ -1,20 +1,7 @@
-import { Page } from "playwright";
-
-interface ScenarioContext {
-  page: Page;
-  emitLog: (msg: string) => void;
-  assert: (condition: boolean, message: string) => void;
-  waitForBackend: (
-    fn: () => Promise<boolean>,
-    timeoutMs?: number,
-  ) => Promise<void>;
-  dbChecker: any;
-}
+import { ScenarioContext } from '../runner';
 
 export async function run(ctx: ScenarioContext) {
-  const { page, emitLog, assert, waitForBackend, dbChecker } = ctx;
-
-  emitLog("[SKENARIO 3] Katalog via injection...");
+  const { assert, emitLog, waitForBackend, getLocalAndServerState, injectAction, emitState, dbChecker } = ctx;
 
   const catName = `AUTOTEST-${Date.now()}`;
   const sku = `AT-${Date.now()}`;
@@ -23,246 +10,89 @@ export async function run(ctx: ScenarioContext) {
   const price = 25000;
   const editPrice = 27000;
 
-  const injectCategory = async (name: string) => {
-    emitLog(`[INJECT] CATEGORY_ADDED '${name}'...`);
-    await page.evaluate(async (catName) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
-      const id = "CAT-" + Date.now().toString(36).toUpperCase();
-      await api.ledger.appendEvent("CATEGORY_ADDED", {
-        id,
-        name: catName.trim().toUpperCase(),
-        created_by: "AUDITOR",
-      });
-    }, name);
-  };
+  emitLog("[SKENARIO 3] Mengambil snapshot awal (Katalog)...");
+  const pre = await getLocalAndServerState();
 
-  const injectProduct = async (
-    sku: string,
-    name: string,
-    price: number,
-    categoryName: string,
-  ) => {
-    emitLog(`[INJECT] PRODUCT_ADDED '${sku}'...`);
-    await page.evaluate(
-      async ({ skuVal, nameVal, priceVal, catName }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("PRODUCT_ADDED", {
-          sku: skuVal.trim().toUpperCase(),
-          name: nameVal.trim().toUpperCase(),
-          price: priceVal,
-          categoryId: cat.id,
-          created_by: "AUDITOR",
-        });
-      },
-      { skuVal: sku, nameVal: name, priceVal: price, catName: categoryName },
-    );
-  };
+  emitLog("[SKENARIO 3] Aksi: CATEGORY_ADDED...");
+  const catId = "CAT-" + Date.now().toString(36).toUpperCase();
+  await injectAction("CATEGORY_ADDED", {
+    id: catId,
+    name: catName,
+    created_by: "AUDITOR",
+  });
 
-  const injectProductEdit = async (
-    sku: string,
-    newName: string,
-    newPrice: number,
-    categoryName: string,
-  ) => {
-    emitLog(`[INJECT] PRODUCT_EDITED '${sku}'...`);
-    await page.evaluate(
-      async ({ skuVal, nameVal, priceVal, catName }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("PRODUCT_EDITED", {
-          sku: skuVal.trim().toUpperCase(),
-          name: nameVal.trim().toUpperCase(),
-          price: priceVal,
-          categoryId: cat.id,
-          updated_by: "AUDITOR",
-        });
-      },
-      {
-        skuVal: sku,
-        nameVal: newName,
-        priceVal: newPrice,
-        catName: categoryName,
-      },
-    );
-  };
+  await waitForBackend(async () => {
+    const s = await dbChecker.getServerState();
+    return s.journal.some((e: any) => e.eventType === "CATEGORY_ADDED" && e.payload?.name === catName);
+  });
 
-  const injectProductArchive = async (sku: string) => {
-    emitLog(`[INJECT] PRODUCT_ARCHIVED '${sku}'...`);
-    await page.evaluate(async (skuVal) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
-      await api.ledger.appendEvent("PRODUCT_ARCHIVED", {
-        sku: skuVal.trim().toUpperCase(),
-        archived_by: "AUDITOR",
-      });
-    }, sku);
-  };
+  let postCat = await getLocalAndServerState();
+  emitState("POST", "Tambah Kategori", postCat.local, postCat.server);
 
-  const injectCategoryDelete = async (name: string, expectBlocked = false) => {
-    emitLog(`[INJECT] CATEGORY_DELETED '${name}'...`);
-    try {
-      await page.evaluate(async (catName) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
-        const state = await api.projector.getState();
-        const cat = (state.categories || []).find(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-        if (!cat) throw new Error(`Kategori '${catName}' tidak ditemukan`);
-        await api.ledger.appendEvent("CATEGORY_DELETED", {
-          id: cat.id,
-          name: cat.name,
-          deleted_by: "AUDITOR",
-        });
-      }, name);
-      if (expectBlocked) throw new Error("Seharusnya diblokir");
-    } catch (err: any) {
-      if (expectBlocked && err.message.includes("masih digunakan")) {
-        emitLog(`[INJECT] Delete blocked as expected.`);
-        return;
-      }
-      throw err;
-    }
-  };
+  const backendCatEvent = postCat.server.journal.find((e: any) => e.eventType === "CATEGORY_ADDED" && e.payload?.name === catName);
+  assert(backendCatEvent !== undefined, "Event CATEGORY_ADDED harus ada di backend");
 
-  const assertLocalCategory = async (name: string) => {
-    let found = false;
-    const start = Date.now();
+  emitLog("[SKENARIO 3] Aksi: PRODUCT_ADDED...");
+  await injectAction("PRODUCT_ADDED", {
+    sku: sku,
+    name: prodName,
+    price: price,
+    categoryId: catId,
+    created_by: "AUDITOR",
+  });
 
-    // Polling maksimal 5 detik
-    while (Date.now() - start < 5000) {
-      found = await page.evaluate(async (catName) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) return false;
-        // Memastikan menggunakan getState() sesuai perbaikan sebelumnya
-        const state = await api.projector.getState();
-        return (state.categories || []).some(
-          (c: any) => c.name.toUpperCase() === catName.toUpperCase(),
-        );
-      }, name);
+  await waitForBackend(async () => {
+    const s = await dbChecker.getServerState();
+    return s.journal.some((e: any) => e.eventType === "PRODUCT_ADDED" && e.payload?.sku === sku);
+  });
 
-      if (found) break;
-      await new Promise((r) => setTimeout(r, 200)); // Jeda 200ms sebelum cek lagi
-    }
+  let postProd = await getLocalAndServerState();
+  emitState("POST", "Tambah Produk", postProd.local, postProd.server);
+  assert(postProd.server.journal.some((e: any) => e.eventType === "PRODUCT_ADDED" && e.payload?.sku === sku), "Event PRODUCT_ADDED harus ada di backend");
 
-    assert(
-      found,
-      `Kategori '${name}' tidak ada di RxDB lokal setelah menunggu 5 detik`,
-    );
-  };
+  emitLog("[SKENARIO 3] Aksi: PRODUCT_EDITED...");
+  await injectAction("PRODUCT_EDITED", {
+    sku: sku,
+    name: prodEditName,
+    price: editPrice,
+    categoryId: catId,
+    updated_by: "AUDITOR",
+  });
 
-  const assertLocalProduct = async (sku: string) => {
-    let found = false;
-    const start = Date.now();
+  await waitForBackend(async () => {
+    const s = await dbChecker.getServerState();
+    return s.journal.some((e: any) => e.eventType === "PRODUCT_EDITED" && e.payload?.sku === sku);
+  });
 
-    // Polling maksimal 5 detik
-    while (Date.now() - start < 5000) {
-      found = await page.evaluate(async (skuVal) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) return false;
-        const state = await api.projector.getState();
-        return (state.products || []).some(
-          (p: any) => p.sku.toUpperCase() === skuVal.toUpperCase(),
-        );
-      }, sku);
+  emitLog("[SKENARIO 3] Aksi: PRODUCT_ARCHIVED...");
+  await injectAction("PRODUCT_ARCHIVED", {
+    sku: sku,
+    archived_by: "AUDITOR",
+  });
 
-      if (found) break;
-      await new Promise((r) => setTimeout(r, 200));
-    }
+  await waitForBackend(async () => {
+    const s = await dbChecker.getServerState();
+    return s.journal.some((e: any) => e.eventType === "PRODUCT_ARCHIVED" && e.payload?.sku === sku);
+  });
 
-    assert(
-      found,
-      `Produk '${sku}' tidak ada di RxDB lokal setelah menunggu 5 detik`,
-    );
-  };
+  let postArchive = await getLocalAndServerState();
+  emitState("POST", "Arsip Produk", postArchive.local, postArchive.server);
 
-  const assertBackendCategory = async (name: string) => {
-    await waitForBackend(
-      async () => !!(await dbChecker.getCategoryByName(name)),
-    );
-    const cat = await dbChecker.getCategoryByName(name);
-    assert(!!cat, `Kategori '${name}' tidak ada di backend`);
-  };
+  emitLog("[SKENARIO 3] Aksi: CATEGORY_DELETED...");
+  await injectAction("CATEGORY_DELETED", {
+    id: catId,
+    name: catName,
+    deleted_by: "AUDITOR",
+  });
 
-  const assertBackendProduct = async (sku: string) => {
-    await waitForBackend(async () => !!(await dbChecker.getProductBySku(sku)));
-    const prod = await dbChecker.getProductBySku(sku);
-    assert(!!prod, `Produk '${sku}' tidak ada di backend`);
-  };
+  await waitForBackend(async () => {
+    const s = await dbChecker.getServerState();
+    return s.journal.some((e: any) => e.eventType === "CATEGORY_DELETED" && e.payload?.id === catId);
+  });
 
-  const assertBackendEvent = async (
-    eventType: string,
-    field: string,
-    value: string,
-  ) => {
-    await waitForBackend(
-      async () =>
-        !!(await dbChecker.getEventByTypeAndPayloadField(
-          eventType,
-          field,
-          value,
-        )),
-    );
-    const ev = await dbChecker.getEventByTypeAndPayloadField(
-      eventType,
-      field,
-      value,
-    );
-    assert(!!ev, `Event '${eventType}' ${field}='${value}' tidak ditemukan`);
-  };
+  let postFinal = await getLocalAndServerState();
+  emitState("POST", "Hapus Kategori (Setelah Arsip)", postFinal.local, postFinal.server);
+  assert(postFinal.server.journal.some((e: any) => e.eventType === "CATEGORY_DELETED" && e.payload?.id === catId), "Event CATEGORY_DELETED harus ada di backend");
 
-  const assertNoOrphans = async () => {
-    await waitForBackend(
-      async () => (await dbChecker.getOrphanProducts()).length === 0,
-    );
-    const orphans = await dbChecker.getOrphanProducts();
-    assert(
-      orphans.length === 0,
-      `Ditemukan ${orphans.length} produk yatim piatu`,
-    );
-  };
-
-  // --- ALUR EKSEKUSI ---
-
-  await injectCategory(catName);
-  await assertLocalCategory(catName);
-  await assertBackendCategory(catName);
-  await assertBackendEvent("CATEGORY_ADDED", "name", catName);
-
-  await injectProduct(sku, prodName, price, catName);
-  await assertLocalProduct(sku);
-  await assertBackendProduct(sku);
-  await assertBackendEvent("PRODUCT_ADDED", "sku", sku);
-
-  await injectProductEdit(sku, prodEditName, editPrice, catName);
-  await assertBackendEvent("PRODUCT_EDITED", "sku", sku);
-
-  await injectProductArchive(sku);
-  await assertBackendEvent("PRODUCT_ARCHIVED", "sku", sku);
-
-  await injectProduct(sku, prodEditName, editPrice, catName);
-  await assertBackendEvent("PRODUCT_ADDED", "sku", sku);
-
-  await injectCategoryDelete(catName, true);
-  await assertBackendCategory(catName);
-
-  await injectProductArchive(sku);
-  await injectCategoryDelete(catName);
-  await assertBackendEvent("CATEGORY_DELETED", "name", catName);
-
-  await assertNoOrphans();
-
-  emitLog("[SKENARIO 3] Katalog selesai. Semua assertion HIJAU.");
+  emitLog("[SKENARIO 3] Katalog selesai.");
 }

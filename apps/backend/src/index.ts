@@ -19,6 +19,7 @@ import { startEWalletWorker } from "./workers/wms/ewallet.worker";
 
 // --- SHARED ROUTES ---
 import provisionRoutes from "./routes/shared/provision";
+import auditRoutes from "./routes/shared/audit.routes";
 
 // --- POS ROUTES ---
 import syncRoutes from "./routes/pos/sync";
@@ -60,6 +61,7 @@ app.use(express.json());
 
 // --- POS & SHARED ROUTES ---
 app.use("/api/provision", provisionRoutes);
+app.use("/api/audit", auditRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/transactions", transactionRoutes);
