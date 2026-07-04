@@ -98,7 +98,6 @@ async function runSeed() {
         pin: "112233",
         role: "superadmin",
       },
-      // Admin WMS Bandung
       {
         id: ulid(),
         branchId: pusatBandungId,
@@ -108,7 +107,6 @@ async function runSeed() {
         pin: "123456",
         role: "manager",
       },
-      // Admin WMS Garut (UNTUK TESTING FILTER REGION)
       {
         id: ulid(),
         branchId: pusatGarutId,
