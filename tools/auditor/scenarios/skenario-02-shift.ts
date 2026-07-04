@@ -1,97 +1,42 @@
-import { Page } from "playwright";
-
-interface ScenarioContext {
-  page: Page;
-  emitLog: (msg: string) => void;
-  assert: (condition: boolean, message: string) => void;
-  waitForBackend: (
-    fn: () => Promise<boolean>,
-    timeoutMs?: number,
-  ) => Promise<void>;
-  dbChecker: any;
-}
+import { ScenarioContext } from '../runner';
 
 export async function run(ctx: ScenarioContext) {
-  const { page, emitLog } = ctx;
-  emitLog("[SKENARIO 2] Login & Shift via injection...");
+  const { assert, emitLog, waitForBackend, getLocalAndServerState, injectAction, emitState, dbChecker } = ctx;
 
-  const injectOperatorAuth = async (pin: string) => {
-    emitLog(`[INJECT] OPERATOR_AUTHENTICATED via PIN '${pin}'...`);
-    await page.evaluate(async (pinVal) => {
-      const api = (window as any).__AUDITOR__;
-      if (!api) throw new Error("Auditor API tidak terekspos");
+  emitLog("[SKENARIO 2] Mengambil snapshot awal...");
+  const pre = await getLocalAndServerState();
 
-      const state = await api.projector.getState();
-      const staff = (state.staff || []).find(
-        (s: any) => s.pin === pinVal && s.isActive !== false,
-      );
-      if (!staff)
-        throw new Error(`Staff dengan PIN '${pinVal}' tidak ditemukan`);
+  emitLog("[SKENARIO 2] Menjalankan Virtual Aksi: OPERATOR_AUTHENTICATED...");
+  const staff = (pre.local.staffList || []).find((s: any) => s.pin === "112233");
+  if (!staff) throw new Error("Staff dengan PIN '112233' tidak ditemukan");
 
-      const deviceId =
-        localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
-      const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
+  await injectAction("OPERATOR_AUTHENTICATED", {
+    operatorId: staff.id,
+    pin: "112233",
+    authenticatedAt: new Date().toISOString()
+  });
 
-      await api.ledger.appendEvent("OPERATOR_AUTHENTICATED", {
-        operatorId: staff.id,
-        pin: pinVal,
-        authenticatedAt: new Date().toISOString(),
-        deviceId,
-        branchId,
-      });
-    }, pin);
-  };
+  emitLog("[SKENARIO 2] Menjalankan Virtual Aksi: SHIFT_OPENED...");
+  const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
+  await ctx.page.evaluate((sId) => { localStorage.setItem("ASSTRO_CURRENT_SHIFT_ID", sId); }, shiftId);
 
-  const injectOpenShift = async (pin: string, amount: number) => {
-    emitLog(`[INJECT] SHIFT_OPENED dengan modal ${amount}...`);
-    await page.evaluate(
-      async ({ pinVal, cashVal }) => {
-        const api = (window as any).__AUDITOR__;
-        if (!api) throw new Error("Auditor API tidak terekspos");
+  await injectAction("SHIFT_OPENED", {
+    operatorId: staff.id,
+    initial_cash: 150000,
+    shiftId,
+    cashierId: staff.id,
+    openedAt: new Date().toISOString(),
+    startingCash: 150000
+  });
 
-        const state = await api.projector.getState();
-        const staff = (state.staff || []).find(
-          (s: any) => s.pin === pinVal && s.isActive !== false,
-        );
-        if (!staff)
-          throw new Error(`Staff dengan PIN '${pinVal}' tidak ditemukan`);
+  emitLog("[SKENARIO 2] Menunggu sinkronisasi backend...");
+  await waitForBackend(async () => {
+    const shift = await dbChecker.getLatestShift();
+    return shift !== null && Number(shift.starting_cash || shift.startingCash) === 150000;
+  });
 
-        const shiftId = `SHIFT-${Date.now().toString(36).toUpperCase()}`;
-        const branchId = localStorage.getItem("ASSTRO_BRANCH_ID") || "";
-        const deviceId =
-          localStorage.getItem("ASSTRO_DEVICE_ID") || "UNKNOWN-DEVICE";
+  const post = await getLocalAndServerState();
+  emitState("POST", "Skenario 2: Login & Buka Shift", post.local, post.server);
 
-        let businessDate = localStorage.getItem("ASSTRO_BUSINESS_DATE");
-        if (!businessDate) {
-          const now = new Date();
-          const ref =
-            now.getHours() < 3
-              ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-              : now;
-          businessDate = ref.toISOString().slice(0, 10);
-          localStorage.setItem("ASSTRO_BUSINESS_DATE", businessDate);
-        }
-
-        localStorage.setItem("ASSTRO_CURRENT_SHIFT_ID", shiftId);
-
-        await api.ledger.appendEvent("SHIFT_OPENED", {
-          operatorId: staff.id,
-          initial_cash: cashVal,
-          shiftId,
-          branchId,
-          deviceId,
-          cashierId: staff.id,
-          openedAt: new Date().toISOString(),
-          startingCash: cashVal,
-          businessDate,
-        });
-      },
-      { pinVal: pin, cashVal: amount },
-    );
-  };
-
-  await injectOperatorAuth("112233");
-  await injectOpenShift("112233", 150000);
-
-  emitLog("[SKENARIO 2] Login & Shift selesai.");
+  assert(post.server.shifts.length > pre.server.shifts.length || post.server.shifts.length > 0, "Shift harus terbuat di backend");
 }

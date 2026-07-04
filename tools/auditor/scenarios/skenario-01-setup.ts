@@ -1,15 +1,8 @@
 import { Page, Route } from "playwright";
 
-interface ScenarioContext {
-  page: Page;
-  emitLog: (msg: string) => void;
-  assert: (condition: boolean, message: string) => void;
-  waitForBackend: (
-    fn: () => Promise<boolean>,
-    timeoutMs?: number,
-  ) => Promise<void>;
-  dbChecker: any;
-}
+import { ScenarioContext } from '../runner';
+
+// import { ScenarioContext } from '../runner';
 
 export async function run(ctx: ScenarioContext) {
   const { page, emitLog, assert } = ctx;

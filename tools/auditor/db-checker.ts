@@ -1,61 +1,31 @@
 // tools/auditor/db-checker.ts
-import { Pool } from "pg";
-import * as dotenv from "dotenv";
 
-dotenv.config({ path: "../../apps/backend/.env" });
-
-let pool: Pool | null = null;
-let isPoolClosed = false;
-
-const getPool = () => {
-  if (!pool || isPoolClosed) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
-    isPoolClosed = false;
-  }
-
-  return pool;
-};
+const API_BASE_URL = "http://localhost:4000/api/audit";
 
 export const dbChecker = {
   async getLatestShift() {
-    const res = await getPool().query(
-      "SELECT * FROM pos_shifts ORDER BY opened_at DESC LIMIT 1",
-    );
-    return res.rows[0] || null;
+    const res = await fetch(`${API_BASE_URL}/latest-shift`);
+    return res.json();
   },
 
   async getDeviceProfile(deviceId: string) {
-    const res = await getPool().query(
-      "SELECT * FROM device_profiles WHERE id = $1",
-      [deviceId],
-    );
-    return res.rows[0] || null;
+    const res = await fetch(`${API_BASE_URL}/device-profile/${deviceId}`);
+    return res.json();
   },
 
   async getCategoryByName(name: string) {
-    const res = await getPool().query(
-      "SELECT * FROM product_categories WHERE name = $1 LIMIT 1",
-      [name],
-    );
-    return res.rows[0] || null;
+    const res = await fetch(`${API_BASE_URL}/category-by-name/${name}`);
+    return res.json();
   },
 
   async getProductBySku(sku: string) {
-    const res = await getPool().query(
-      "SELECT * FROM products WHERE sku = $1 LIMIT 1",
-      [sku],
-    );
-    return res.rows[0] || null;
+    const res = await fetch(`${API_BASE_URL}/product-by-sku/${sku}`);
+    return res.json();
   },
 
   async getEventByType(eventType: string, limit = 20) {
-    const res = await getPool().query(
-      "SELECT * FROM event_journal WHERE event_type = $1 ORDER BY recorded_at DESC LIMIT $2",
-      [eventType, limit],
-    );
-    return res.rows;
+    const res = await fetch(`${API_BASE_URL}/events-by-type/${eventType}?limit=${limit}`);
+    return res.json();
   },
 
   async getEventByTypeAndPayloadField(
@@ -63,33 +33,33 @@ export const dbChecker = {
     field: string,
     value: string,
   ) {
-    const res = await getPool().query(
-      `SELECT * FROM event_journal WHERE event_type = $1 AND payload->>$2 = $3 ORDER BY recorded_at DESC LIMIT 1`,
-      [eventType, field, value],
-    );
-    return res.rows[0] || null;
+    const res = await fetch(`${API_BASE_URL}/event-by-type-and-field`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ type: eventType, field, value }),
+    });
+    return res.json();
   },
 
   async getOrphanProducts() {
-    const res = await getPool().query(
-      `SELECT p.* FROM products p
-       LEFT JOIN product_categories c ON p.category_id = c.id
-       WHERE c.id IS NULL`,
-    );
-    return res.rows;
+    const res = await fetch(`${API_BASE_URL}/orphan-products`);
+    return res.json();
   },
 
   async resetDatabase() {
     console.log("[DB] Mereset data transaksi server untuk audit...");
-    await getPool().query("TRUNCATE transactions, journal, shifts CASCADE");
+    await fetch(`${API_BASE_URL}/reset-database`, { method: "POST" });
     console.log("[DB] Database Server bersih.");
   },
 
   async close() {
-    if (isPoolClosed || !pool) return;
-    isPoolClosed = true;
-    const currentPool = pool;
-    pool = null;
-    await currentPool.end();
+    // No longer needed
   },
+
+  async getServerState() {
+    const res = await fetch(`${API_BASE_URL}/state`);
+    return res.json();
+  }
 };
