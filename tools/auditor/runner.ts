@@ -38,7 +38,9 @@ async function runAudit(io: Server) {
 
     // Binding for Evidence Collector
     await context.exposeBinding("sendAuditorEvent", async ({ page }, eventType, payload) => {
-       if (eventType === "interaction_start") {
+       if (eventType === "app_ready") {
+           await engine.onAppReady(payload.baselineState);
+       } else if (eventType === "interaction_start") {
            await engine.onInteractionStart(payload.interactionId, payload.element, payload.timestamp);
        } else if (eventType === "interaction_complete") {
            await engine.onInteractionComplete(payload.interactionId, payload.evidence);

@@ -189,6 +189,24 @@ export function injectEvidenceCollector() {
     registerEvidence("urlChanges");
   });
 
+  // --- Baseline State Initialization ---
+  let appReadySent = false;
+  const checkReadyInterval = setInterval(async () => {
+    if (window.__AUDITOR__ && window.__AUDITOR__.projector && !appReadySent) {
+      try {
+        const localBaseline = await window.__AUDITOR__.projector.getState();
+        if (window.sendAuditorEvent) {
+          window.sendAuditorEvent("app_ready", { baselineState: localBaseline });
+        }
+        console.log("[Auditor] Baseline state captured.");
+        appReadySent = true;
+        clearInterval(checkReadyInterval);
+      } catch (e) {
+        console.error("Failed to capture baseline state", e);
+      }
+    }
+  }, 1000);
+
   // --- The Trigger: Interaction Observer ---
   document.addEventListener("click", async (e) => {
     const target = e.target as HTMLElement;

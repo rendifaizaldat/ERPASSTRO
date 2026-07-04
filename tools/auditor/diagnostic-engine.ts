@@ -22,8 +22,21 @@ export interface InteractionMeta {
 
 export class DiagnosticEngine {
   private activeInteractions = new Map<string, { meta: InteractionMeta; serverPreState?: any }>();
+  public initialBaseline: { local?: any, server?: any } = {};
 
   constructor(private io: Server) {}
+
+  public async onAppReady(localBaseline: any) {
+    console.log("[Diagnostic] App Ready event received. Fetching server baseline...");
+    this.initialBaseline.local = localBaseline;
+    try {
+       this.initialBaseline.server = await dbChecker.getServerState();
+       console.log("[Diagnostic] Server baseline fetched.");
+       this.io.emit("log", "APP READY: Initial Baseline (Local & Server) has been captured.");
+    } catch (e) {
+       console.error("Failed to fetch server baseline", e);
+    }
+  }
 
   public async onInteractionStart(interactionId: string, meta: InteractionMeta, timestamp: number) {
     console.log(`[Diagnostic] Interaction Started: ${interactionId} on <${meta.tagName}> "${meta.text.trim()}"`);
