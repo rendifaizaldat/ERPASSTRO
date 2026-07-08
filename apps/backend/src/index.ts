@@ -33,6 +33,7 @@ import receivingsRouter from "./routes/wms/receivings.routes";
 import wmsEventsRouter from "./routes/wms/events.routes";
 import { wmsEwalletRoutes } from "./routes/wms/ewallet.routes";
 import { posDataRoutes } from "./routes/wms/pos-data.routes";
+import { coasRouter } from "./routes/wms/coas.routes";
 
 dotenv.config();
 
@@ -46,7 +47,10 @@ const whitelist = [
   process.env.WMS_FRONTEND_URL || "http://localhost:5174",
 ];
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+  origin: function (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) {
     if (!origin || whitelist.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -73,6 +77,7 @@ app.use("/api/wms/write/piutang", piutangRoutes);
 app.use("/api/wms/receivings", receivingsRouter);
 app.use("/api/wms/ewallet", wmsEwalletRoutes);
 app.use("/api/wms/pos-data", posDataRoutes);
+app.use("/api/wms/coas", coasRouter);
 
 app.get("/api/health", (req: Request, res: Response) => {
   res.status(200).json({

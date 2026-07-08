@@ -3,7 +3,8 @@ import { fetchKatalog, getCachedKatalog, saveKatalogCache } from "../service";
 import type { WmsDatabase } from "../database/rx-db";
 
 export interface GlobalCategory {
-  id: string;
+  id: string; // Ini akan berisi kode unik seperti 201SA
+  coaId?: string; // Ikatan ke Parent COA (misal: 1-1201)
   name: string;
   status?: "ACTIVE" | "ARCHIVED";
   createdAt?: string;
@@ -65,6 +66,18 @@ export interface Vendor {
   certifications: string[];
   contractFileUrl: string;
   isActive: boolean;
+}
+
+export interface CoaData {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  normalBalance: string;
+  isHeader: boolean;
+  parent: string | null;
+  desc: string | null;
+  status: string;
 }
 
 export function useKatalog(db: WmsDatabase | null, isInitialized: boolean) {

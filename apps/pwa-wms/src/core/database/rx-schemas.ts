@@ -111,22 +111,32 @@ export const wmsRegionalItemsSchema: RxJsonSchema<WmsRegionalItemsDocType> =
   wmsRegionalItemsSchemaLiteral;
 
 export const wmsCategoriesSchemaLiteral = {
-  title: "wms categories schema",
+  title: "wms categories and coa schema",
   version: 0,
   primaryKey: "id",
   type: "object",
   properties: {
     id: { type: "string", maxLength: 100 },
     name: { type: "string" },
+    docType: { type: "string" },
     status: { type: ["string", "null"] },
     createdAt: { type: ["string", "null"] },
     updatedAt: { type: ["string", "null"] },
+    coaId: { type: ["string", "null"] },
+    code: { type: ["string", "null"] },
+    type: { type: ["string", "null"] },
+    normalBalance: { type: ["string", "null"] },
+    isHeader: { type: ["boolean", "null"] },
+    parent: { type: ["string", "null"] },
+    desc: { type: ["string", "null"] },
   },
-  required: ["id", "name"],
+  required: ["id", "name", "docType"],
 } as const;
+
 export type WmsCategoriesDocType = ExtractDocumentTypeFromTypedRxJsonSchema<
   typeof wmsCategoriesSchemaLiteral
 >;
+
 export const wmsCategoriesSchema: RxJsonSchema<WmsCategoriesDocType> =
   wmsCategoriesSchemaLiteral;
 

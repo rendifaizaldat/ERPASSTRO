@@ -7,6 +7,8 @@ import { PusatSidebar } from "./components/PusatSidebar";
 import { SharedMasterProduct } from "../shared/layouts/PusatMasterProduct";
 import { PusatProductMergeCenter } from "./master/PusatProductMergeCenter";
 import { PusatVendorManagement } from "./master/PusatVendorManagement";
+import { ChartOfAccounts } from "./master/PusatChartOfAccounts";
+import { PusatCategoryMaster } from "./master/PusatCategoryMaster";
 
 // Transactions
 import { OutletReceiving } from "../shared/layouts/OutletReceiving";
@@ -36,12 +38,16 @@ export const PusatLayout = () => {
         return <PusatAccountPayable />;
       case "master_product":
         return <SharedMasterProduct />;
+      case "master_category":
+        return <PusatCategoryMaster />;
       case "master_vendor":
         return <PusatVendorManagement />;
       case "product_merge":
         return <PusatProductMergeCenter />;
       case "E_wallet":
         return <EWallet />;
+      case "COA":
+        return <ChartOfAccounts />;
       case "reports":
         return <PusatWmsReport />;
       case "receiving":

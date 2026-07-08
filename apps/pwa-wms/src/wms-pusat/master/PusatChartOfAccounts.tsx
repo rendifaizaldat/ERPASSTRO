@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useWms } from "../../core/WmsProvider";
 import { useToast } from "../../shared/components/Toast";
+import { publishEvent } from "../../core/event-publisher";
 import {
   Landmark,
   ListTree,
@@ -9,146 +11,342 @@ import {
   Save,
   Wallet,
   FolderOpen,
+  Info,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
-// --- MOCK DATA ---
-const INITIAL_COA = [
-  { code: "1000", name: "KAS & BANK", type: "ASSET", parent: null },
-  { code: "1101", name: "Kas Outlet Lembang", type: "ASSET", parent: "1000" },
-  { code: "1102", name: "Bank BCA Operasional", type: "ASSET", parent: "1000" },
-  { code: "2000", name: "LIABILITAS", type: "LIABILITY", parent: null },
+const ACCOUNT_TYPES = [
   {
-    code: "2101",
-    name: "Hutang Usaha (Vendor)",
-    type: "LIABILITY",
-    parent: "2000",
-  },
-  { code: "4000", name: "PENDAPATAN", type: "REVENUE", parent: null },
-  { code: "4101", name: "Penjualan Dine In", type: "REVENUE", parent: "4000" },
-  {
-    code: "5000",
-    name: "BEBAN POKOK PENDAPATAN",
-    type: "EXPENSE",
-    parent: null,
+    id: "ASSET",
+    label: "Aset / Harta",
+    defaultPrefix: "1",
+    defaultBalance: "DEBIT",
+    report: "NERACA (Balance Sheet)",
   },
   {
-    code: "5101",
-    name: "HPP Makanan & Minuman",
-    type: "EXPENSE",
-    parent: "5000",
+    id: "LIABILITY",
+    label: "Liabilitas / Utang",
+    defaultPrefix: "2",
+    defaultBalance: "KREDIT",
+    report: "NERACA (Balance Sheet)",
+  },
+  {
+    id: "EQUITY",
+    label: "Ekuitas / Modal",
+    defaultPrefix: "3",
+    defaultBalance: "KREDIT",
+    report: "NERACA (Balance Sheet)",
+  },
+  {
+    id: "REVENUE",
+    label: "Pendapatan / Omzet",
+    defaultPrefix: "4",
+    defaultBalance: "KREDIT",
+    report: "LABA RUGI (Profit & Loss)",
+  },
+  {
+    id: "COGS",
+    label: "Harga Pokok Penjualan (HPP)",
+    defaultPrefix: "5",
+    defaultBalance: "DEBIT",
+    report: "LABA RUGI (Profit & Loss)",
+  },
+  {
+    id: "EXPENSE",
+    label: "Beban / Biaya Operasional",
+    defaultPrefix: "6",
+    defaultBalance: "DEBIT",
+    report: "LABA RUGI (Profit & Loss)",
   },
 ];
 
-const ACCOUNT_TYPES = [
-  { id: "ASSET", label: "Aset (Harta)" },
-  { id: "LIABILITY", label: "Liabilitas (Hutang)" },
-  { id: "EQUITY", label: "Ekuitas (Modal)" },
-  { id: "REVENUE", label: "Pendapatan" },
-  { id: "EXPENSE", label: "Beban / Biaya" },
-];
+const InfoTip: React.FC<{ description: string }> = ({ description }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="text-sky-500 hover:text-sky-700 cursor-pointer p-0.5 align-middle"
+      >
+        <Info size={12} />
+      </button>
+      {open && (
+        <div className="absolute z-9999 left-0 mt-1 w-72 p-3 bg-slate-800 text-white text-[10px] leading-relaxed rounded-lg shadow-2xl pointer-events-auto">
+          {description}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const ChartOfAccounts: React.FC = () => {
+  const { coas = [], fetchCoaData } = useWms();
   const { showToast } = useToast();
-
-  const [accounts, setAccounts] = useState(INITIAL_COA);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Form State
   const [isEditing, setIsEditing] = useState(false);
-  const [accCode, setAccCode] = useState("");
-  const [accName, setAccName] = useState("");
   const [accType, setAccType] = useState("ASSET");
   const [accParent, setAccParent] = useState("");
+  const [accCodeSuffix, setAccCodeSuffix] = useState("");
+  const [accName, setAccName] = useState("");
+  const [accNormalBalance, setAccNormalBalance] = useState("DEBIT");
+  const [isHeader, setIsHeader] = useState(false);
+  const [accDesc, setAccDesc] = useState("");
+  const [originalCode, setOriginalCode] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const resetForm = () => {
-    setAccCode("");
-    setAccName("");
-    setAccType("ASSET");
-    setAccParent("");
-    setIsEditing(false);
+  useEffect(() => {
+    if (!isEditing) {
+      const selectedType = ACCOUNT_TYPES.find((t) => t.id === accType);
+      if (selectedType) {
+        setAccNormalBalance(selectedType.defaultBalance);
+      }
+      setAccParent("");
+      setAccCodeSuffix("");
+    }
+  }, [accType, isEditing]);
+
+  const getPrefix = () => {
+    if (accParent) {
+      return accParent.substring(0, 4);
+    }
+    const selectedType = ACCOUNT_TYPES.find((t) => t.id === accType);
+    return selectedType ? selectedType.defaultPrefix + "-" : "";
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const currentPrefix = getPrefix();
+
+  const resetForm = () => {
+    console.log("🔁 [resetForm] Form di-reset ke awal");
+    setAccType("ASSET");
+    setAccParent("");
+    setAccCodeSuffix("");
+    setAccName("");
+    setAccNormalBalance("DEBIT");
+    setIsHeader(false);
+    setAccDesc("");
+    setIsEditing(false);
+    setOriginalCode("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accCode || !accName) {
+
+    console.log("📝 [handleSubmit] Mulai proses submit");
+    console.log("   accCodeSuffix:", accCodeSuffix);
+    console.log("   accName:", accName);
+    console.log("   accType:", accType);
+    console.log("   accParent:", accParent);
+    console.log("   accNormalBalance:", accNormalBalance);
+    console.log("   isHeader:", isHeader);
+    console.log("   accDesc:", accDesc);
+    console.log("   isEditing:", isEditing);
+    console.log("   originalCode:", originalCode);
+
+    if (!accCodeSuffix || !accName) {
+      console.warn("⚠️ [handleSubmit] Validasi gagal: kode atau nama kosong");
       showToast("Kode dan Nama Akun wajib diisi!", "ERROR");
       return;
     }
 
-    const payload = {
-      code: accCode,
-      name: accName.toUpperCase(),
-      type: accType,
-      parent: accParent || null,
-    };
+    const fullCode = `${currentPrefix}${accCodeSuffix}`;
+    console.log("📌 [handleSubmit] fullCode yang akan diproses:", fullCode);
 
-    if (isEditing) {
-      setAccounts(accounts.map((a) => (a.code === accCode ? payload : a)));
-      showToast("Data COA berhasil diperbarui!", "SUCCESS");
-    } else {
-      const exists = accounts.some((a) => a.code === accCode);
-      if (exists) {
-        showToast("Kode Akun sudah digunakan!", "ERROR");
-        return;
-      }
-      setAccounts(
-        [...accounts, payload].sort((a, b) => a.code.localeCompare(b.code)),
-      );
-      showToast("Akun baru berhasil ditambahkan!", "SUCCESS");
+    const exists = coas.some(
+      (a: any) => a.code === fullCode && a.status !== "ARCHIVED",
+    );
+    if (exists && (!isEditing || (isEditing && fullCode !== originalCode))) {
+      console.warn("⚠️ [handleSubmit] Kode duplikat terdeteksi:", fullCode);
+      showToast(`Kode Akun ${fullCode} sudah terdaftar!`, "ERROR");
+      return;
     }
-    resetForm();
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        id: fullCode,
+        code: fullCode,
+        name: accName,
+        type: accType,
+        normalBalance: accNormalBalance,
+        isHeader: isHeader,
+        parent: accParent || null,
+        desc: accDesc,
+        status: "ACTIVE",
+      };
+
+      console.log("📦 [handleSubmit] Payload yang akan dikirim:", payload);
+
+      if (isEditing) {
+        console.log(
+          `✏️ [handleSubmit] Mengirim event COA_UPDATED untuk ${originalCode}`,
+        );
+        await publishEvent("COA_UPDATED", originalCode, payload);
+        console.log("✅ [handleSubmit] Event COA_UPDATED berhasil dipublish");
+        showToast(`Update akun ${fullCode} masuk antrean!`, "SUCCESS");
+      } else {
+        console.log(
+          `➕ [handleSubmit] Mengirim event COA_CREATED untuk ${fullCode}`,
+        );
+        await publishEvent("COA_CREATED", fullCode, payload);
+        console.log("✅ [handleSubmit] Event COA_CREATED berhasil dipublish");
+        showToast(`Pembuatan akun ${fullCode} masuk antrean!`, "SUCCESS");
+      }
+
+      resetForm();
+
+      // 2. TRIGGER REFETCH AGAR UI MUNCUL DATANYA
+      if (fetchCoaData) {
+        console.log(
+          "🔄 [handleSubmit] Memanggil fetchCoaData setelah 300ms untuk memperbarui UI",
+        );
+        setTimeout(() => {
+          console.log("⏳ [handleSubmit] Eksekusi fetchCoaData sekarang...");
+          fetchCoaData();
+          console.log(
+            "✅ [handleSubmit] fetchCoaData selesai dipanggil (perhatikan response di komponen)",
+          );
+        }, 300);
+      } else {
+        console.warn(
+          "⚠️ [handleSubmit] fetchCoaData tidak tersedia, UI tidak akan otomatis refresh",
+        );
+      }
+    } catch (error) {
+      console.error("❌ [handleSubmit] Gagal menyimpan COA:", error);
+      showToast("Gagal menyimpan COA ke database lokal.", "ERROR");
+    } finally {
+      setIsSubmitting(false);
+      console.log("🏁 [handleSubmit] Proses submit selesai (finally)");
+    }
   };
 
   const handleEditClick = (acc: any) => {
-    setAccCode(acc.code);
-    setAccName(acc.name);
+    console.log("✏️ [handleEditClick] Memulai edit untuk akun:", acc.code);
+    console.log("   Data akun:", acc);
+
     setAccType(acc.type);
     setAccParent(acc.parent || "");
+    setAccName(acc.name);
+    setAccNormalBalance(acc.normalBalance);
+    setIsHeader(acc.isHeader);
+    setAccDesc(acc.desc || "");
+
+    const typeDef = ACCOUNT_TYPES.find((t) => t.id === acc.type);
+    let prefix = "";
+    let suffix = "";
+
+    if (acc.parent) {
+      prefix = acc.parent.substring(0, 4);
+      suffix = acc.code.substring(prefix.length);
+    } else {
+      prefix = typeDef ? typeDef.defaultPrefix + "-" : "";
+      suffix = acc.code.substring(prefix.length);
+    }
+
+    setAccCodeSuffix(suffix);
+    setOriginalCode(acc.code);
     setIsEditing(true);
+
+    console.log("   suffix di-set:", suffix);
+    console.log("   originalCode di-set:", acc.code);
     showToast("Mode Edit Diaktifkan", "INFO");
   };
 
-  const handleDelete = (code: string) => {
-    const isParent = accounts.some((a) => a.parent === code);
+  const handleDelete = async (code: string) => {
+    console.log(
+      `🗑️ [handleDelete] Mencoba menghapus akun dengan kode: ${code}`,
+    );
+
+    const isParent = coas.some(
+      (a: any) => a.parent === code && a.status !== "ARCHIVED",
+    );
     if (isParent) {
-      showToast("Gagal! Akun ini memiliki sub-akun (child).", "ERROR");
+      console.warn("⚠️ [handleDelete] Gagal: akun ini memiliki sub-akun aktif");
+      showToast("Gagal! Akun induk ini memiliki sub-akun aktif.", "ERROR");
       return;
     }
-    setAccounts(accounts.filter((a) => a.code !== code));
-    showToast("Akun berhasil dihapus", "WARNING");
+
+    if (confirm(`Yakin ingin menghapus (arsip) kode akun ${code}?`)) {
+      try {
+        console.log(
+          `📤 [handleDelete] Mengirim event COA_DELETED untuk ${code}`,
+        );
+        await publishEvent("COA_DELETED", code, { id: code });
+        console.log("✅ [handleDelete] Event COA_DELETED berhasil dipublish");
+        showToast(`Hapus akun ${code} masuk antrean`, "WARNING");
+
+        // Memuat ulang data setelah dihapus
+        if (fetchCoaData) {
+          console.log("🔄 [handleDelete] Memanggil fetchCoaData setelah 300ms");
+          setTimeout(() => {
+            console.log("⏳ [handleDelete] Eksekusi fetchCoaData...");
+            fetchCoaData();
+            console.log("✅ [handleDelete] fetchCoaData selesai dipanggil");
+          }, 300);
+        }
+      } catch (error) {
+        console.error("❌ [handleDelete] Gagal menghapus COA:", error);
+        showToast("Gagal menghapus COA dari database lokal.", "ERROR");
+      }
+    } else {
+      console.log("🚫 [handleDelete] Penghapusan dibatalkan oleh pengguna");
+    }
   };
 
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter(
-      (a) =>
-        a.code.includes(searchTerm) ||
-        a.name.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [accounts, searchTerm]);
+  const activeCoas = useMemo(() => {
+    return coas.filter((a: any) => a.status !== "ARCHIVED");
+  }, [coas]);
 
-  // Hirarki pembantu untuk dropdown (Hanya akun parent / header yang bisa jadi parent)
-  const potentialParents = accounts.filter(
-    (a) => a.code.endsWith("00") || a.parent === null,
+  const filteredAccounts = useMemo(() => {
+    return activeCoas
+      .filter(
+        (a: any) =>
+          a.code.includes(searchTerm) ||
+          a.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+      .sort((a: any, b: any) => a.code.localeCompare(b.code));
+  }, [activeCoas, searchTerm]);
+
+  const potentialParents = activeCoas.filter(
+    (a: any) => a.isHeader && a.type === accType,
   );
 
   return (
-    <div className="space-y-6 pb-10 animate-fade">
-      {/* HEADER */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-          <Landmark className="text-sky-600" />
-          Chart of Accounts (COA)
-        </h2>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-          Bagan Akun Standar Akuntansi Keuangan untuk pemetaan jurnal Ledger
-        </p>
+    <div className="h-full flex flex-col bg-slate-50">
+      <div className="shrink-0 bg-white p-4 md:p-6 border-b border-slate-200 shadow-sm z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+              <Landmark className="text-sky-600" />
+              Chart of Accounts (Bagan Akun)
+            </h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              Manajemen terpusat struktur kode keuangan untuk neraca & laba
+              rugi.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-        {/* PANEL KIRI: FORM INPUT */}
-        <div className="xl:col-span-1 space-y-6">
+      <div className="flex flex-col xl:flex-row flex-1 min-h-0">
+        <div className="w-full xl:w-130 shrink-0 p-4 xl:p-6 border-r border-slate-200 bg-white overflow-y-auto overflow-x-visible">
           <div
-            className={`bg-white border-2 p-5 rounded-2xl shadow-sm transition-all ${isEditing ? "border-amber-400" : "border-slate-200"}`}
+            className={`border-2 p-5 rounded-2xl shadow-sm transition-all ${isEditing ? "border-amber-400" : "border-slate-200"}`}
           >
             <div className="flex items-center justify-between border-b-2 border-slate-100 pb-3 mb-4">
               <div className="flex items-center gap-2">
@@ -174,93 +372,153 @@ export const ChartOfAccounts: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                  Kode Akun *
-                </label>
-                <input
-                  required
-                  disabled={isEditing}
-                  value={accCode}
-                  onChange={(e) =>
-                    setAccCode(e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="Misal: 1103"
-                  className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 disabled:bg-slate-100 disabled:text-slate-400 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                  Nama Akun *
-                </label>
-                <input
-                  required
-                  value={accName}
-                  onChange={(e) => setAccName(e.target.value.toUpperCase())}
-                  placeholder="KAS KECIL..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                  Tipe Akun (Klasifikasi) *
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  1. Kategori Utama (Tipe Akun) *
+                  <InfoTip description="Fungsi: Menentukan kategori besar akun (Aset, Liabilitas, Ekuitas, Pendapatan, HPP, Beban). Tujuan: Menentukan posisi akun di Laporan Keuangan; kelompok 1-3 → Neraca, kelompok 4-6 → Laba Rugi." />
                 </label>
                 <select
                   required
                   value={accType}
                   onChange={(e) => setAccType(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
+                  className="w-full mt-1 px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
                   {ACCOUNT_TYPES.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.label}
+                      {t.label} — Lari ke: {t.report}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                  Sub-Akun Dari (Opsional)
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  2. Sub-Kategori / Akun Induk
+                  <InfoTip description="Fungsi: Pengelompokan lebih spesifik di bawah Tipe Akun (misal: Aset Lancar, Aset Tetap). Tujuan: Membantu sistem menyusun struktur laporan agar lebih rapi dan menentukan digit kedua pada kode akun secara otomatis." />
                 </label>
                 <select
                   value={accParent}
                   onChange={(e) => setAccParent(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
+                  className="w-full mt-1 px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
-                  <option value="">-- JADIKAN AKUN HEADER UTAMA --</option>
-                  {potentialParents.map((p) => (
+                  <option value="">
+                    -- JADIKAN AKUN LEVEL PERTAMA (ROOT) --
+                  </option>
+                  {potentialParents.map((p: any) => (
                     <option key={p.code} value={p.code}>
-                      {p.code} - {p.name}
+                      [{p.code}] {p.name}
                     </option>
                   ))}
                 </select>
               </div>
 
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  3. Kode & Nama Akun *
+                  <InfoTip description="Kode: Identitas unik angka, prefiks otomatis. Nama: Label spesifik akun (contoh: Kas Kecil, Persediaan Bahan Baku). Pastikan kode unik untuk mencegah duplikasi." />
+                </label>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="px-3 py-2.5 bg-slate-200 text-slate-600 border-2 border-slate-200 rounded-xl text-xs font-black select-none whitespace-nowrap">
+                    {currentPrefix}
+                  </div>
+                  <input
+                    required
+                    value={accCodeSuffix}
+                    onChange={(e) =>
+                      setAccCodeSuffix(
+                        e.target.value.replace(/\D/g, "").slice(0, 4),
+                      )
+                    }
+                    placeholder="101"
+                    className="w-20 px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 transition-colors"
+                  />
+                  <input
+                    required
+                    value={accName}
+                    onChange={(e) => setAccName(e.target.value)}
+                    placeholder="Misal: Persediaan Bahan Baku - Makanan"
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black focus:outline-none focus:border-sky-500 transition-colors"
+                  />
+                </div>
+                <p className="text-[9px] font-bold text-sky-600 uppercase tracking-widest mt-1">
+                  Kode Final: {currentPrefix}
+                  {accCodeSuffix || "..."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    4. Saldo Normal *
+                    <InfoTip description="Fungsi: Menetapkan sifat dasar akun saat penambahan nilai (Aset/HPP/Beban → Debit, Utang/Modal/Pendapatan → Kredit). Tujuan: Memastikan perhitungan laporan keuangan tidak terbalik." />
+                  </label>
+                  <select
+                    required
+                    value={accNormalBalance}
+                    onChange={(e) => setAccNormalBalance(e.target.value)}
+                    className="w-full mt-1 px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value="DEBIT">DEBIT</option>
+                    <option value="KREDIT">KREDIT</option>
+                  </select>
+                </div>
+                <div className="flex flex-col justify-end">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 mb-1">
+                    5. Akun Induk (Header)
+                    <InfoTip description="Fungsi: Menandai apakah akun ini hanya 'payung/judul kelompok' (tidak bisa dipakai jurnal langsung). Tujuan: Menggabungkan total anak akun agar laporan keuangan tampil ringkas." />
+                  </label>
+                  <div
+                    onClick={() => setIsHeader(!isHeader)}
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border-2 cursor-pointer transition-colors select-none ${isHeader ? "bg-indigo-50 border-indigo-400 text-indigo-700" : "bg-slate-50 border-slate-200 text-slate-500"}`}
+                  >
+                    {isHeader ? (
+                      <CheckSquare size={16} />
+                    ) : (
+                      <Square size={16} />
+                    )}
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      Akun Induk
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  6. Keterangan / Deskripsi (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={accDesc}
+                  onChange={(e) => setAccDesc(e.target.value)}
+                  placeholder="Catatan mengenai fungsi akun..."
+                  className="w-full mt-1 px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-sky-500 transition-colors resize-none"
+                />
+              </div>
+
               <button
                 type="submit"
-                className={`w-full py-3 mt-4 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${isEditing ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30" : "bg-sky-600 hover:bg-sky-700 shadow-sky-600/30"}`}
+                disabled={isSubmitting}
+                className={`w-full py-3 mt-4 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${isEditing ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/30" : "bg-sky-600 hover:bg-sky-700 shadow-sky-600/30"}`}
               >
-                <Save size={16} />{" "}
+                {isSubmitting ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                  <Save size={16} />
+                )}
                 {isEditing ? "Simpan Perubahan" : "Tambahkan Akun"}
               </button>
             </form>
           </div>
         </div>
 
-        {/* PANEL KANAN: LIST COA */}
-        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[600px]">
-          <div className="p-5 border-b border-slate-100 bg-slate-50 space-y-4 rounded-t-2xl">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <ListTree className="text-sky-600" size={20} />
-                <span className="font-black text-sm text-slate-800 uppercase tracking-tight">
-                  Struktur Bagan Akun
-                </span>
-              </div>
+        <div className="flex-1 flex flex-col min-h-0 bg-white xl:bg-slate-50">
+          <div className="p-4 xl:p-6 border-b border-slate-200 bg-white space-y-4 sticky top-0 z-10">
+            <div className="flex items-center gap-2">
+              <ListTree className="text-sky-600" size={20} />
+              <span className="font-black text-sm text-slate-800 uppercase tracking-tight">
+                Struktur Bagan Akun
+              </span>
             </div>
-
             <div className="relative">
               <Search
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -276,7 +534,7 @@ export const ChartOfAccounts: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-x-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 xl:p-6 custom-scrollbar">
             <div className="space-y-1">
               {filteredAccounts.length === 0 ? (
                 <div className="py-20 text-center">
@@ -286,19 +544,18 @@ export const ChartOfAccounts: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                filteredAccounts.map((acc) => {
-                  const isHeader =
-                    acc.parent === null || acc.code.endsWith("00");
+                filteredAccounts.map((acc: any) => {
+                  const typeDef = ACCOUNT_TYPES.find((t) => t.id === acc.type);
                   return (
                     <div
                       key={acc.code}
-                      className={`flex items-center justify-between p-3 border rounded-xl transition-all hover:border-sky-200 group ${isHeader ? "bg-slate-100 border-slate-200 mt-3" : "bg-white border-slate-100 ml-6"}`}
+                      className={`flex items-center justify-between p-3 border rounded-xl transition-all hover:border-sky-200 group ${acc.isHeader ? "bg-slate-100 border-slate-200 mt-4 mb-2 shadow-sm" : "bg-white border-slate-100 ml-8"}`}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isHeader ? "bg-slate-200 text-slate-600" : "bg-sky-50 text-sky-600"}`}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${acc.isHeader ? "bg-slate-800 text-white" : "bg-sky-50 text-sky-600"}`}
                         >
-                          {isHeader ? (
+                          {acc.isHeader ? (
                             <FolderOpen size={14} />
                           ) : (
                             <Wallet size={14} />
@@ -306,20 +563,33 @@ export const ChartOfAccounts: React.FC = () => {
                         </div>
                         <div>
                           <p
-                            className={`font-black uppercase text-xs tracking-tight ${isHeader ? "text-slate-800" : "text-slate-700"}`}
+                            className={`font-black text-xs tracking-tight uppercase ${acc.isHeader ? "text-slate-900" : "text-slate-700"}`}
                           >
-                            <span className="text-sky-600 mr-2">
+                            <span
+                              className={`${acc.isHeader ? "text-slate-500" : "text-sky-600"} mr-2`}
+                            >
                               {acc.code}
-                            </span>{" "}
+                            </span>
                             {acc.name}
                           </p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">
-                            Tipe: {acc.type}{" "}
-                            {acc.parent && `| INDUK: ${acc.parent}`}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span
+                              className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${acc.normalBalance === "DEBIT" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+                            >
+                              {acc.normalBalance}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                              {typeDef?.label}{" "}
+                              {acc.parent && ` | Induk: ${acc.parent}`}
+                            </span>
+                          </div>
+                          {acc.desc && (
+                            <p className="text-[9px] font-medium text-slate-500 mt-1 flex items-center gap-1">
+                              <Info size={10} /> {acc.desc}
+                            </p>
+                          )}
                         </div>
                       </div>
-
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => handleEditClick(acc)}

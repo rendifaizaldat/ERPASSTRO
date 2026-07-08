@@ -2,7 +2,7 @@
 git add .
 
 # 2. Kunci perubahan dengan catatan singkat
-git commit -m "update fitur X atau perbaikan bug Y"
+git commit -m "update fitur X atau perbaikan"
 
 # 3. Lempar langsung ke GitHub
 git push

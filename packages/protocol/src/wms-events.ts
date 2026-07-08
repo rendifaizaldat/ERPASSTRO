@@ -3,12 +3,14 @@ import { z } from "zod";
 // --- PAYLOAD SCHEMAS ---
 export const GlobalCategoryCreatedPayloadSchema = z.object({
   id: z.string(),
+  coaId: z.string().optional().nullable(), // Relasi ke COA
   name: z.string(),
-  status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
+  status: z.enum(["ACTIVE", "ARCHIVED"]).optional().default("ACTIVE"),
 });
 
 export const GlobalCategoryUpdatedPayloadSchema = z.object({
   id: z.string(),
+  coaId: z.string().optional().nullable(),
   name: z.string(),
   status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
 });
@@ -35,6 +37,24 @@ export const MasterProductAddedPayloadSchema = z.object({
   purchasePrice: z.number().optional(),
   margin: z.number().optional(),
   sellingPrice: z.number().optional(),
+});
+// --- CHART OF ACCOUNTS (COA) SCHEMAS ---
+export const CoaCreatedPayloadSchema = z.object({
+  id: z.string(), // Kita gunakan kode COA sebagai ID (contoh: "1-1100")
+  code: z.string(),
+  name: z.string(),
+  type: z.string(),
+  normalBalance: z.enum(["DEBIT", "KREDIT"]),
+  isHeader: z.boolean(),
+  parent: z.string().optional().nullable(),
+  desc: z.string().optional().nullable(),
+  status: z.enum(["ACTIVE", "ARCHIVED"]).optional().default("ACTIVE"),
+});
+
+export const CoaUpdatedPayloadSchema = CoaCreatedPayloadSchema;
+
+export const CoaDeletedPayloadSchema = z.object({
+  id: z.string(),
 });
 
 export const GlobalProductUpdatedPayloadSchema = z.object({
@@ -430,6 +450,18 @@ export const WmsEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("WMS_FINANCIAL_CONFIG_UPDATED"),
     payload: FinancialConfigUpdatedPayloadSchema,
+  }),
+  z.object({
+    type: z.literal("COA_CREATED"),
+    payload: CoaCreatedPayloadSchema,
+  }),
+  z.object({
+    type: z.literal("COA_UPDATED"),
+    payload: CoaUpdatedPayloadSchema,
+  }),
+  z.object({
+    type: z.literal("COA_DELETED"),
+    payload: CoaDeletedPayloadSchema,
   }),
 ]);
 

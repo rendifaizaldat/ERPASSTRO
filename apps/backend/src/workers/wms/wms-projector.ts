@@ -19,6 +19,7 @@ import { eq, inArray } from "drizzle-orm";
 import { AckPolicy } from "nats";
 import { ulid } from "ulidx";
 import { publishSyncHint } from "../../services/websocket";
+import { coa } from "../../db/schema/db_wms/wms.coa";
 
 /**
  * Daftar event WMS yang diproyeksikan oleh projector ini.
@@ -44,6 +45,9 @@ const PROJECTOR_EVENT_TYPES = new Set([
   "RECEIVING_OUTLET_SUBMITTED",
   "RECEIVING_PUSAT_SUBMITTED",
   "AP_OUTLET_PAYMENT_SUBMITTED",
+  "COA_CREATED",
+  "COA_UPDATED",
+  "COA_DELETED",
 ]);
 
 export async function startWmsProjector() {
@@ -312,6 +316,81 @@ export async function startWmsProjector() {
                 .where(eq(wmsVendors.id, payload.id || envelope.aggregateId));
               handled = true;
               break;
+
+            // --- COA EVENTS ---
+            case "COA_CREATED": {
+              await tx
+                .insert(coa)
+                .values({
+                  id: payload.id,
+                  code: payload.code,
+                  name: payload.name,
+                  type: payload.type,
+                  normalBalance: payload.normalBalance,
+                  isHeader: payload.isHeader,
+                  parent: payload.parent || null,
+                  desc: payload.desc || null,
+                  status: payload.status || "ACTIVE",
+                  createdAt: new Date(envelope.timestamp),
+                  updatedAt: new Date(envelope.timestamp),
+                })
+                // Opsional: Tambahkan onConflictDoUpdate agar lebih kebal (idempotent)
+                .onConflictDoUpdate({
+                  target: coa.id,
+                  set: {
+                    name: payload.name,
+                    type: payload.type,
+                    normalBalance: payload.normalBalance,
+                    isHeader: payload.isHeader,
+                    parent: payload.parent || null,
+                    desc: payload.desc || null,
+                    status: payload.status || "ACTIVE",
+                    updatedAt: new Date(envelope.timestamp),
+                  },
+                });
+              console.log(`[WMS PROJECTOR] COA Created: ${payload.id}`);
+              handled = true;
+              break;
+            }
+
+            case "COA_UPDATED": {
+              await tx
+                .update(coa)
+                .set({
+                  id: payload.id,
+                  code: payload.code,
+                  name: payload.name,
+                  type: payload.type,
+                  normalBalance: payload.normalBalance,
+                  isHeader: payload.isHeader,
+                  parent: payload.parent || null,
+                  desc: payload.desc || null,
+                  status: payload.status || "ACTIVE",
+                  updatedAt: new Date(envelope.timestamp),
+                })
+                .where(eq(coa.id, envelope.aggregateId));
+
+              console.log(
+                `[WMS PROJECTOR] COA Updated: ${envelope.aggregateId} -> ${payload.id}`,
+              );
+              handled = true;
+              break;
+            }
+
+            case "COA_DELETED": {
+              await tx
+                .update(coa)
+                .set({
+                  status: "ARCHIVED",
+                  updatedAt: new Date(envelope.timestamp),
+                })
+                .where(eq(coa.id, envelope.aggregateId));
+              console.log(
+                `[WMS PROJECTOR] COA Archived: ${envelope.aggregateId}`,
+              );
+              handled = true;
+              break;
+            }
 
             case "RECEIVING_OUTLET_SUBMITTED":
             case "RECEIVING_PUSAT_SUBMITTED": {

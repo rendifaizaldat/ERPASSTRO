@@ -19,6 +19,7 @@ interface KatalogResponse {
   regions: Region[];
   branches: Branch[];
   vendors: Vendor[];
+  coas?: any[];
   metadata?: {
     uomOptions: string[];
   };

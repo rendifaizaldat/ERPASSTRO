@@ -718,7 +718,7 @@ export const OutletReceiving: React.FC = () => {
           {/* Bagian bawah: filter outlet + tombol tipe transaksi */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4">
             {/* Pilih Outlet – dropdown lebih rapi */}
-            <div className="flex items-center gap-2 min-w-[200px]">
+            <div className="flex items-center gap-2 min-w-50">
               <Store size={18} className="text-slate-400" />
               <select
                 value={targetEntity}

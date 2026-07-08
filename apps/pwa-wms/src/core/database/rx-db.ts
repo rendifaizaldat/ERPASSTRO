@@ -40,11 +40,9 @@ export type WmsDatabaseCollections = {
   wms_regional_items: any;
   wms_categories: any;
   wms_receivings: any;
-  // Koleksi Akunting
   wms_financial_configs: any;
   wms_wallet_accounts: any;
   wms_wallet_ledgers: any;
-  // --- INI YANG KURANG SEBELUMNYA: Koleksi POS ---
   wms_pos_invoices: any;
   wms_pos_payments: any;
 };
@@ -85,7 +83,6 @@ export const initWmsDb = async (): Promise<WmsDatabase> => {
         wms_financial_configs: { schema: wmsFinancialConfigSchema },
         wms_wallet_accounts: { schema: wmsWalletAccountSchema },
         wms_wallet_ledgers: { schema: wmsWalletLedgerSchema },
-        // Koleksi POS
         wms_pos_invoices: {
           schema: wmsPosInvoicesSchema,
         },

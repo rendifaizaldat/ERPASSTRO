@@ -7,12 +7,10 @@ import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  Tag,
   Trash2,
   Pencil,
   Search,
   ArchiveRestore,
-  Import,
   Download,
   Box,
   Save,
@@ -52,12 +50,7 @@ export const SharedMasterProduct: React.FC = () => {
   const isPusat = wmsState?.wmsType === "PUSAT";
   const resolvedBranchId = isPusat ? null : wmsState?.branchId || null;
 
-  // ========== STATE ASLI (KATEGORI & PRODUK) ==========
-  const [catName, setCatName] = useState("");
-  const [activeCatTab, setActiveCatTab] = useState<"ACTIVE" | "ARCHIVED">(
-    "ACTIVE",
-  );
-
+  // ========== STATE FORM PRODUK ==========
   const [isEditing, setIsEditing] = useState(false);
   const [prodSku, setProdSku] = useState("");
   const [prodName, setProdName] = useState("");
@@ -78,7 +71,7 @@ export const SharedMasterProduct: React.FC = () => {
     data: any;
   } | null>(null);
 
-  // ========== STATE UNTUK IMPORT/EXPORT (TAMBAHAN) ==========
+  // ========== STATE UNTUK IMPORT/EXPORT ==========
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -87,22 +80,14 @@ export const SharedMasterProduct: React.FC = () => {
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ========== STATE ANALYTICS ==========
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(
     null,
   );
 
-  // ========== FUNGSI ASLI (TIDAK DIUBAH) ==========
   const activeCategories = useMemo(
     () => categories.filter((c: any) => c.status !== "ARCHIVED"),
     [categories],
   );
-  const archivedCategories = useMemo(
-    () => categories.filter((c: any) => c.status === "ARCHIVED"),
-    [categories],
-  );
-  const displayCategories =
-    activeCatTab === "ACTIVE" ? activeCategories : archivedCategories;
 
   const handlePriceChange = (val: string) => {
     setProdPrice(val);
@@ -116,25 +101,6 @@ export const SharedMasterProduct: React.FC = () => {
     const basePrice = Number(prodPrice) || 0;
     const margin = Number(val) || 0;
     setProdSellingPrice((basePrice + (basePrice * margin) / 100).toString());
-  };
-
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!catName.trim())
-      return showToast("Nama kategori tidak boleh kosong!", "ERROR");
-    const newCatId = generateDeterministicId("CAT", catName);
-    const newCat = {
-      id: newCatId,
-      name: catName.toUpperCase(),
-      status: "ACTIVE",
-    };
-    try {
-      await publishEvent("CATEGORY_CREATED", newCatId, newCat);
-      setCatName("");
-      showToast("Perintah tambah kategori masuk antrean!", "SUCCESS");
-    } catch (error) {
-      showToast("Gagal menyimpan perintah ke database lokal (RxDB).", "ERROR");
-    }
   };
 
   const resetForm = () => {
@@ -297,35 +263,29 @@ export const SharedMasterProduct: React.FC = () => {
     );
   }, [selectedHistoryItem, receivings]);
 
-  // ========== FUNGSI DOWNLOAD TEMPLATE (PINTAR DENGAN DROPDOWN) ==========
   const downloadTemplate = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Data");
       const lookupSheet = workbook.addWorksheet("Lookup");
 
-      // Data lookup
       const activeCats = categories.filter((c: any) => c.status !== "ARCHIVED");
       const catNames = activeCats.map((c: any) => c.name);
       const uomList = uomOptions;
 
-      // Isi sheet Lookup
       lookupSheet.addRow(["Kategori"]);
       catNames.forEach((name) => lookupSheet.addRow([name]));
-      lookupSheet.addRow([]); // separator
+      lookupSheet.addRow([]);
       lookupSheet.addRow(["UOM"]);
       uomList.forEach((uom) => lookupSheet.addRow([uom]));
 
-      // Tentukan range dinamis
       const catStartRow = 2;
       const catEndRow = catStartRow + catNames.length - 1;
-      const uomStartRow = catStartRow + catNames.length + 2; // setelah separator dan header UOM
+      const uomStartRow = catStartRow + catNames.length + 2;
       const uomEndRow = uomStartRow + uomList.length - 1;
 
-      // Sembunyikan sheet Lookup (tidak veryHidden, cukup hidden agar referensi tetap valid)
       lookupSheet.state = "hidden";
 
-      // Kolom berdasarkan tipe pusat/outlet
       const isPusatMode = wmsState?.wmsType === "PUSAT";
       const columns = isPusatMode
         ? [
@@ -346,7 +306,6 @@ export const SharedMasterProduct: React.FC = () => {
 
       worksheet.columns = columns;
 
-      // Baris contoh
       const exampleRow: any = {
         sku: "",
         name: "CONTOH PRODUK",
@@ -357,13 +316,10 @@ export const SharedMasterProduct: React.FC = () => {
       if (isPusatMode) exampleRow.margin = 10;
       worksheet.addRow(exampleRow);
 
-      // Referensi range
       const catRange = `Lookup!$A$${catStartRow}:$A$${catEndRow}`;
       const uomRange = `Lookup!$A$${uomStartRow}:$A$${uomEndRow}`;
 
-      // Terapkan data validation untuk baris 2..100
       for (let i = 2; i <= 100; i++) {
-        // Kategori (kolom C)
         worksheet.getCell(i, 3).dataValidation = {
           type: "list",
           allowBlank: false,
@@ -372,7 +328,6 @@ export const SharedMasterProduct: React.FC = () => {
           errorTitle: "Kategori tidak valid",
           error: "Pilih kategori dari daftar.",
         };
-        // UOM (kolom D)
         worksheet.getCell(i, 4).dataValidation = {
           type: "list",
           allowBlank: false,
@@ -383,7 +338,6 @@ export const SharedMasterProduct: React.FC = () => {
         };
       }
 
-      // Styling header
       const headerRow = worksheet.getRow(1);
       headerRow.font = { bold: true };
       headerRow.fill = {
@@ -409,7 +363,6 @@ export const SharedMasterProduct: React.FC = () => {
     }
   };
 
-  // ========== FUNGSI IMPORT DENGAN BULK EVENT ==========
   const handleImport = async () => {
     if (!importFile) {
       showToast("Pilih file Excel terlebih dahulu", "ERROR");
@@ -427,7 +380,7 @@ export const SharedMasterProduct: React.FC = () => {
       const errors: { row: number; message: string }[] = [];
 
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // skip header
+        if (rowNumber === 1) return;
         const sku = row.getCell(1).value?.toString()?.trim() || "";
         const name = row.getCell(2).value?.toString()?.trim();
         const categoryName = row.getCell(3).value?.toString()?.trim();
@@ -464,7 +417,6 @@ export const SharedMasterProduct: React.FC = () => {
           return;
         }
 
-        // Cek existing product berdasarkan SKU
         let existing = null;
         if (sku) {
           existing = outletProducts.find((p: any) => p.id === sku);
@@ -519,7 +471,6 @@ export const SharedMasterProduct: React.FC = () => {
             },
           });
         }
-        // Jika existing dan SKIP -> tidak ditambahkan
       });
 
       if (errors.length > 0) {
@@ -551,7 +502,6 @@ export const SharedMasterProduct: React.FC = () => {
     }
   };
 
-  // ========== FUNGSI EXPORT KE EXCEL ==========
   const exportToExcel = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -635,7 +585,6 @@ export const SharedMasterProduct: React.FC = () => {
     }
   };
 
-  // ========== FUNGSI EXPORT KE PDF ==========
   const exportToPDF = () => {
     try {
       const doc = new jsPDF({ orientation: "landscape" });
@@ -692,9 +641,8 @@ export const SharedMasterProduct: React.FC = () => {
     }
   };
 
-  // ========== MODAL IMPORT ==========
   const ImportModal = () => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
         <div className="bg-sky-600 p-5 flex justify-between items-center text-white">
           <div className="flex items-center gap-3">
@@ -715,7 +663,7 @@ export const SharedMasterProduct: React.FC = () => {
             <p className="text-xs text-slate-500 mb-2">Format file: .xlsx</p>
             <button
               onClick={downloadTemplate}
-              className="text-sky-600 text-xs font-bold underline flex items-center gap-1 mx-auto"
+              className="text-sky-600 text-xs font-bold underline flex items-center gap-1 mx-auto cursor-pointer"
             >
               <FileSpreadsheet size={14} /> Download Template Excel
             </button>
@@ -743,7 +691,7 @@ export const SharedMasterProduct: React.FC = () => {
             <span className="text-xs font-bold text-slate-600">
               Jika SKU sudah ada:
             </span>
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 value="SKIP"
@@ -752,7 +700,7 @@ export const SharedMasterProduct: React.FC = () => {
               />
               <span className="text-xs">Lewati</span>
             </label>
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 value="OVERWRITE"
@@ -765,7 +713,7 @@ export const SharedMasterProduct: React.FC = () => {
           <button
             onClick={handleImport}
             disabled={!importFile}
-            className="w-full py-3 bg-sky-600 disabled:bg-slate-300 text-white rounded-xl font-black text-xs uppercase tracking-widest"
+            className="w-full py-3 bg-sky-600 disabled:bg-slate-300 text-white rounded-xl font-black text-xs uppercase tracking-widest cursor-pointer"
           >
             Import Sekarang
           </button>
@@ -774,9 +722,8 @@ export const SharedMasterProduct: React.FC = () => {
     </div>
   );
 
-  // ========== MODAL EXPORT ==========
   const ExportModal = () => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
         <div className="bg-emerald-600 p-5 flex justify-between items-center text-white">
           <div className="flex items-center gap-3">
@@ -787,7 +734,7 @@ export const SharedMasterProduct: React.FC = () => {
           </div>
           <button
             onClick={() => setIsExportModalOpen(false)}
-            className="p-2 hover:bg-white/20 rounded-full"
+            className="p-2 hover:bg-white/20 rounded-full cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -799,13 +746,13 @@ export const SharedMasterProduct: React.FC = () => {
           </p>
           <button
             onClick={exportToExcel}
-            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"
           >
             <FileSpreadsheet size={16} /> Export ke Excel
           </button>
           <button
             onClick={exportToPDF}
-            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer"
           >
             <FileText size={16} /> Export ke PDF
           </button>
@@ -814,10 +761,8 @@ export const SharedMasterProduct: React.FC = () => {
     </div>
   );
 
-  // ========== RENDER JSX ==========
   return (
     <div className="space-y-6 pb-10 animate-fade relative">
-      {/* HEADER dengan tombol import/export */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex justify-between items-start">
           <div>
@@ -834,14 +779,14 @@ export const SharedMasterProduct: React.FC = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setIsImportModalOpen(true)}
-              className="p-2 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-xl transition-colors"
+              className="p-2 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-xl transition-colors cursor-pointer"
               title="Import Data"
             >
               <UploadCloud size={18} />
             </button>
             <button
               onClick={() => setIsExportModalOpen(true)}
-              className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-colors"
+              className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-colors cursor-pointer"
               title="Export Data"
             >
               <Download size={18} />
@@ -850,99 +795,9 @@ export const SharedMasterProduct: React.FC = () => {
         </div>
       </div>
 
-      {/* KONTEN UTAMA (KATEGORI & PRODUK) - TIDAK BERUBAH DARI KODE ASLI */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-        {/* Sisi Kiri: Kategori & Form Produk */}
+        {/* PANEL KIRI: FORM PRODUK (Kategori dihapus karena dipindah ke PusatCategoryMaster) */}
         <div className="xl:col-span-1 space-y-6">
-          {/* A. SETUP KATEGORI */}
-          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 border-b-2 border-sky-100 pb-2 mb-4">
-              <Tag className="text-sky-600" size={16} />
-              <span className="font-black text-xs uppercase tracking-widest text-sky-600">
-                A. Setup Kategori
-              </span>
-            </div>
-
-            <form onSubmit={handleAddCategory} className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={catName}
-                onChange={(e) => setCatName(e.target.value)}
-                placeholder="Contoh: SAYURAN..."
-                className="flex-1 px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500"
-              />
-              <button
-                type="submit"
-                className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl font-black text-xs uppercase transition-all"
-              >
-                + Add
-              </button>
-            </form>
-
-            <div className="flex bg-slate-100 p-1 rounded-lg mb-3">
-              <button
-                onClick={() => setActiveCatTab("ACTIVE")}
-                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all ${activeCatTab === "ACTIVE" ? "bg-white text-sky-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
-              >
-                Aktif ({activeCategories.length})
-              </button>
-              <button
-                onClick={() => setActiveCatTab("ARCHIVED")}
-                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all ${activeCatTab === "ARCHIVED" ? "bg-white text-red-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
-              >
-                Arsip ({archivedCategories.length})
-              </button>
-            </div>
-
-            <div className="border border-slate-100 rounded-xl bg-slate-50 divide-y max-h-40 overflow-y-auto custom-scrollbar">
-              {displayCategories.length === 0 ? (
-                <div className="p-4 text-center text-slate-400 text-[10px] font-bold uppercase">
-                  Tidak ada kategori di tab ini
-                </div>
-              ) : (
-                displayCategories.map((cat: any) => (
-                  <div
-                    key={cat.id}
-                    className="px-3 py-2 flex justify-between items-center group hover:bg-white transition-colors"
-                  >
-                    <span
-                      className={`font-black text-xs uppercase ${cat.status === "ARCHIVED" ? "text-slate-400 line-through" : "text-slate-700"}`}
-                    >
-                      {cat.name}
-                    </span>
-                    {activeCatTab === "ACTIVE" ? (
-                      <button
-                        onClick={() =>
-                          setItemToDelete({ type: "CATEGORY", data: cat })
-                        }
-                        className="text-slate-300 hover:text-red-500 p-1 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={async () => {
-                          await publishEvent("CATEGORY_UPDATED", cat.id, {
-                            ...cat,
-                            status: "ACTIVE",
-                          });
-                          showToast(
-                            "Perintah restore masuk antrean.",
-                            "SUCCESS",
-                          );
-                        }}
-                        className="text-slate-300 hover:text-emerald-500 p-1 hover:bg-emerald-50 rounded-lg"
-                      >
-                        <ArchiveRestore size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* B. TAMBAH MASTER BARU */}
           <div
             className={`bg-white border-2 p-5 rounded-2xl shadow-sm transition-all ${isEditing ? "border-amber-400" : "border-slate-200"}`}
           >
@@ -955,13 +810,13 @@ export const SharedMasterProduct: React.FC = () => {
                 <span
                   className={`font-black text-xs uppercase tracking-widest ${isEditing ? "text-amber-600" : "text-sky-600"}`}
                 >
-                  {isEditing ? "Mode Edit Barang" : "B. Tambah Produk"}
+                  {isEditing ? "Mode Edit Barang" : "Form Tambah Produk"}
                 </span>
               </div>
               {isEditing && (
                 <button
                   onClick={resetForm}
-                  className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase"
+                  className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase cursor-pointer"
                 >
                   Batal Edit
                 </button>
@@ -991,7 +846,7 @@ export const SharedMasterProduct: React.FC = () => {
                     required
                     value={prodCatId}
                     onChange={(e) => setProdCatId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
                   >
                     <option value="">-- PILIH --</option>
                     {activeCategories.map((c: any) => (
@@ -1009,7 +864,7 @@ export const SharedMasterProduct: React.FC = () => {
                     required
                     value={prodUnit}
                     onChange={(e) => setProdUnit(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-black uppercase focus:outline-none focus:border-sky-500 cursor-pointer"
                   >
                     <option value="" disabled>
                       -- UOM --
@@ -1088,7 +943,7 @@ export const SharedMasterProduct: React.FC = () => {
 
               <button
                 type="submit"
-                className={`w-full py-3 mt-4 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${isEditing ? "bg-amber-500 hover:bg-amber-600" : "bg-sky-600 hover:bg-sky-700"}`}
+                className={`w-full py-3 mt-4 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${isEditing ? "bg-amber-500 hover:bg-amber-600" : "bg-sky-600 hover:bg-sky-700"}`}
               >
                 <Save size={16} />{" "}
                 {isEditing ? "Update Data" : "Simpan & Gunakan"}
@@ -1097,8 +952,8 @@ export const SharedMasterProduct: React.FC = () => {
           </div>
         </div>
 
-        {/* SISI KANAN: TABEL PRODUK */}
-        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[600px]">
+        {/* PANEL KANAN: TABEL PRODUK */}
+        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-150">
           <div className="p-5 border-b border-slate-100 space-y-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div className="flex items-center gap-2">
@@ -1113,13 +968,13 @@ export const SharedMasterProduct: React.FC = () => {
               <div className="flex bg-slate-100 p-1.5 rounded-xl shrink-0">
                 <button
                   onClick={() => setActiveTab("ACTIVE")}
-                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === "ACTIVE" ? "bg-white text-sky-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${activeTab === "ACTIVE" ? "bg-white text-sky-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
                 >
                   Aktif ({activeCount})
                 </button>
                 <button
                   onClick={() => setActiveTab("ARCHIVED")}
-                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === "ARCHIVED" ? "bg-white text-red-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${activeTab === "ARCHIVED" ? "bg-white text-red-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
                 >
                   Arsip ({archivedCount})
                 </button>
@@ -1141,7 +996,7 @@ export const SharedMasterProduct: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-x-auto">
+          <div className="flex-1 overflow-x-auto custom-scrollbar">
             <table className="w-full text-left whitespace-nowrap">
               <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                 <tr>
@@ -1228,7 +1083,7 @@ export const SharedMasterProduct: React.FC = () => {
                             </div>
                             <button
                               onClick={() => setSelectedHistoryItem(p)}
-                              className="p-2 bg-slate-100 hover:bg-sky-100 text-slate-400 hover:text-sky-600 rounded-full transition-colors"
+                              className="p-2 bg-slate-100 hover:bg-sky-100 text-slate-400 hover:text-sky-600 rounded-full transition-colors cursor-pointer"
                               title="Lihat Riwayat Harga Aktual"
                             >
                               <LineChart size={16} />
@@ -1242,7 +1097,7 @@ export const SharedMasterProduct: React.FC = () => {
                                 <>
                                   <button
                                     onClick={() => handleEditClick(p)}
-                                    className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"
+                                    className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all cursor-pointer"
                                     title="Edit Data"
                                   >
                                     <Pencil size={14} />
@@ -1254,7 +1109,7 @@ export const SharedMasterProduct: React.FC = () => {
                                         data: p,
                                       })
                                     }
-                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
                                     title="Arsipkan"
                                   >
                                     <Trash2 size={14} />
@@ -1291,7 +1146,7 @@ export const SharedMasterProduct: React.FC = () => {
                                   "SUCCESS",
                                 );
                               }}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all mx-auto"
+                              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all mx-auto cursor-pointer"
                             >
                               <ArchiveRestore size={12} /> Restore
                             </button>
@@ -1309,7 +1164,7 @@ export const SharedMasterProduct: React.FC = () => {
 
       {/* MODAL ANALYTICS: RIWAYAT HARGA AKTUAL */}
       {selectedHistoryItem && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[80vh]">
             <div className="bg-sky-600 p-5 flex justify-between items-center text-white">
               <div className="flex items-center gap-3">
@@ -1327,13 +1182,13 @@ export const SharedMasterProduct: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedHistoryItem(null)}
-                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                className="p-2 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 flex-1 overflow-y-auto">
+            <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
@@ -1423,7 +1278,7 @@ export const SharedMasterProduct: React.FC = () => {
 
       {/* MODAL KONFIRMASI ARSIP */}
       {itemToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade">
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6 text-center animate-slide-up border border-slate-200">
             <XCircle size={48} className="mx-auto text-red-500 mb-4" />
             <h3 className="font-black text-sm uppercase tracking-widest text-slate-800 mb-2">
@@ -1436,43 +1291,33 @@ export const SharedMasterProduct: React.FC = () => {
             <div className="flex gap-2 w-full">
               <button
                 onClick={() => setItemToDelete(null)}
-                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={async () => {
                   try {
-                    if (itemToDelete.type === "CATEGORY") {
-                      await publishEvent(
-                        "CATEGORY_DELETED",
-                        itemToDelete.data.id,
-                        {
-                          id: itemToDelete.data.id,
-                        },
-                      );
-                    } else {
-                      setStatusOverrides((prev) => ({
-                        ...prev,
-                        [itemToDelete.data.sku]: "ARCHIVED",
-                      }));
-                      await publishEvent(
-                        "OUTLET_PRODUCT_UPDATED",
-                        itemToDelete.data.sku,
-                        {
-                          ...itemToDelete.data,
-                          status: "ARCHIVED",
-                          branchId: itemToDelete.data.branchId,
-                        },
-                      );
-                    }
+                    setStatusOverrides((prev) => ({
+                      ...prev,
+                      [itemToDelete.data.sku]: "ARCHIVED",
+                    }));
+                    await publishEvent(
+                      "OUTLET_PRODUCT_UPDATED",
+                      itemToDelete.data.sku,
+                      {
+                        ...itemToDelete.data,
+                        status: "ARCHIVED",
+                        branchId: itemToDelete.data.branchId,
+                      },
+                    );
                     setItemToDelete(null);
                     showToast("Data berhasil diarsipkan", "WARNING");
                   } catch (error) {
                     showToast("Gagal memproses arsip.", "ERROR");
                   }
                 }}
-                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-600 transition-colors"
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-600 transition-colors cursor-pointer"
               >
                 Ya, Arsipkan
               </button>

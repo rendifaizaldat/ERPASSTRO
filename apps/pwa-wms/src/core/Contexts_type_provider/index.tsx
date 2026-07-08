@@ -6,10 +6,9 @@ import { usePiutang } from "./contexts_piutang";
 import { useReceivings } from "./contexts_receivings";
 import { useOutletBalance } from "./contexts_outletBalance";
 import { useSync } from "./contexts_sync";
-// IMPORT EWALLET CONTEXT
 import { useEWallet } from "./contexts_ewallet";
+import { useCoa, CoaData } from "./contexts_coa";
 import type { WmsDatabase } from "../database/rx-db";
-
 import { fetchKatalog, saveKatalogCache } from "../service";
 
 export interface WmsContextProps {
@@ -23,6 +22,7 @@ export interface WmsContextProps {
   unlockScreen: ReturnType<typeof useAuth>["unlockScreen"];
   lockScreen: ReturnType<typeof useAuth>["lockScreen"];
   logoutOperator: ReturnType<typeof useAuth>["logoutOperator"];
+
   categories: ReturnType<typeof useKatalog>["categories"];
   masterProducts: ReturnType<typeof useKatalog>["masterProducts"];
   outletProducts: ReturnType<typeof useKatalog>["outletProducts"];
@@ -30,6 +30,7 @@ export interface WmsContextProps {
   branches: ReturnType<typeof useKatalog>["branches"];
   uomOptions: ReturnType<typeof useKatalog>["uomOptions"];
   vendors: ReturnType<typeof useKatalog>["vendors"];
+
   piutangPusat: ReturnType<typeof usePiutang>["piutangPusat"];
   fetchPiutangPusat: ReturnType<typeof usePiutang>["fetchPiutangPusat"];
   processPayment: ReturnType<typeof usePiutang>["processPayment"];
@@ -40,7 +41,7 @@ export interface WmsContextProps {
   restoreReceiving: ReturnType<typeof usePiutang>["restoreReceiving"];
   voidLastPayment: ReturnType<typeof usePiutang>["voidLastPayment"];
   processBulkPayment: ReturnType<typeof usePiutang>["processBulkPayment"];
-  // Receivings
+
   receivings: ReturnType<typeof useReceivings>["receivings"];
   fetchReceivings: ReturnType<typeof useReceivings>["fetchReceivings"];
   processPaymentHutang: ReturnType<
@@ -49,7 +50,7 @@ export interface WmsContextProps {
   processPaymentApOutlet: ReturnType<
     typeof useReceivings
   >["processPaymentApOutlet"];
-  // Outlet Balance
+
   outletBalances: ReturnType<typeof useOutletBalance>["outletBalances"];
   fetchOutletBalances: ReturnType<
     typeof useOutletBalance
@@ -57,18 +58,21 @@ export interface WmsContextProps {
   mutateOutletBalance: ReturnType<
     typeof useOutletBalance
   >["mutateOutletBalance"];
-  // Sync
+
   isOnline: ReturnType<typeof useSync>["isOnline"];
   isSyncing: ReturnType<typeof useSync>["isSyncing"];
   syncData: ReturnType<typeof useSync>["syncData"];
   addSyncTask: ReturnType<typeof useSync>["addSyncTask"];
   showToast: ReturnType<typeof useSync>["showToast"];
 
-  // ---> E-WALLET (TAMBAHAN BARU) <---
   walletAccounts: ReturnType<typeof useEWallet>["walletAccounts"];
   financialConfigs: ReturnType<typeof useEWallet>["financialConfigs"];
   walletLedgers: ReturnType<typeof useEWallet>["walletLedgers"];
   fetchEWalletData: ReturnType<typeof useEWallet>["fetchEWalletData"];
+
+  // COA & Fetcher
+  coas: CoaData[];
+  fetchCoaData: ReturnType<typeof useCoa>["fetchCoaData"]; // <-- TAMBAHKAN INI
 }
 
 export const WmsContext = createContext<WmsContextProps | undefined>(undefined);
@@ -86,22 +90,18 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({
   const piutang = usePiutang(db, auth.wmsState);
   const receivingsContext = useReceivings(db, auth.wmsState);
   const outletBalance = useOutletBalance(db);
-
-  // INISIALISASI EWALLET
   const ewallet = useEWallet(db, auth.wmsState);
+  const coaContext = useCoa(auth.isInitialized);
 
   const triggerDeltaSync = async () => {
     try {
-      console.log(
-        "⚡ [WMS_PROVIDER] Mengeksekusi Delta Sync dari WebSocket...",
-      );
-
       if (receivingsContext.fetchReceivings)
         await receivingsContext.fetchReceivings();
       if (piutang.fetchPiutangPusat) await piutang.fetchPiutangPusat();
       if (outletBalance.fetchOutletBalances)
         await outletBalance.fetchOutletBalances();
       if (ewallet.fetchEWalletData) await ewallet.fetchEWalletData();
+      if (coaContext.fetchCoaData) await coaContext.fetchCoaData(); // <-- TAMBAHKAN PEMANGGILAN INI
 
       if (db) {
         const data = await fetchKatalog();
@@ -114,13 +114,9 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({
           await db.wms_regional_items.upsert(item);
         for (const cat of data.categories || [])
           await db.wms_categories.upsert(cat);
-
-        // CATATAN: PULL DATA EWALLET DARI API NANTINYA AKAN DITAMBAHKAN DI SINI
       }
-
-      console.log("✅ [WMS_PROVIDER] Delta Sync Selesai!");
     } catch (err) {
-      console.error("❌ [WMS_PROVIDER] Gagal menjalankan Delta Sync:", err);
+      console.error("[WMS_PROVIDER] Gagal menjalankan Delta Sync:", err);
     }
   };
 
@@ -142,6 +138,7 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({
     ...outletBalance,
     ...sync,
     ...ewallet,
+    ...coaContext,
   };
 
   return (

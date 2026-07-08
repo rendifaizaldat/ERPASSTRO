@@ -16,6 +16,8 @@ import {
   ChevronRight,
   GripVertical,
   Settings,
+  Brain,
+  Tags,
 } from "lucide-react";
 
 interface MenuProps {
@@ -138,9 +140,23 @@ export const PusatSidebar: React.FC<MenuProps> = ({
       visible: true,
     },
     {
+      id: "COA",
+      label: "Chart of Accounts",
+      icon: Brain,
+      group: "Keuangan",
+      visible: true,
+    },
+    {
       id: "master_product",
       label: "Master Produk",
       icon: Box,
+      group: "Master Data",
+      visible: true,
+    },
+    {
+      id: "master_category",
+      label: "Master Kategori (COA)",
+      icon: Tags,
       group: "Master Data",
       visible: true,
     },

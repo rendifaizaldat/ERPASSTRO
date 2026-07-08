@@ -2,11 +2,56 @@
 import { dbChecker } from "./db-checker";
 import { Server } from "socket.io";
 
+// --- KAMUS EVENT STATIS ---
+const EVENT_DICTIONARY = {
+  TYPE_A_CREATE: [
+    "SYSTEM_INITIALIZED",
+    "ORDER_CREATED",
+    "INVOICE_CREATED",
+    "PAYMENT_RECEIVED",
+    "TABLE_ADDED",
+    "CATEGORY_ADDED",
+    "PRODUCT_ADDED",
+    "MEMBER_REGISTERED",
+    "SHIFT_OPENED",
+    "PETTY_CASH_ISSUED",
+    "SALE_CREATED",
+    "TABLE_ORDER_PLACED",
+  ],
+  TYPE_B_UPDATE: [
+    "SETTINGS_UPDATED",
+    "ORDER_UPDATED",
+    "ORDER_VOIDED",
+    "ORDER_REFUNDED",
+    "INVOICE_STATUS_UPDATED",
+    "PAYMENT_REFUNDED",
+    "TABLE_DELETED",
+    "TABLE_TOGGLED",
+    "TABLE_CLEARED",
+    "TABLE_PAYMENT_PROCESSED",
+    "SALE_VOIDED",
+    "CATEGORY_DELETED",
+    "PRODUCT_EDITED",
+    "PRODUCT_TOGGLED",
+    "PRODUCT_ARCHIVED",
+    "PRODUCT_DELETED",
+    "STAFF_UPDATED",
+    "STAFF_TOGGLED",
+    "MEMBER_POINT_EARNED",
+    "MEMBER_TIER_UPGRADED",
+    "STOCK_ADJUSTED",
+    "PRICE_CHANGED",
+    "SHIFT_CLOSED",
+    "PETTY_CASH_RESOLVED",
+    "KDS_STATUS_UPDATED",
+  ],
+};
+
 export interface EvidenceBuffer {
   domMutations: number;
   networkRequests: number;
   storageMutations: number;
-  ledgerEvents: number;
+  ledgerEvents: Array<{ type: string; payload: any }>; // Array Payload murni
   toasts: number;
   urlChanges: number;
   preState: any;
@@ -21,90 +66,91 @@ export interface InteractionMeta {
 }
 
 export class DiagnosticEngine {
-  private activeInteractions = new Map<string, { meta: InteractionMeta; serverPreState?: any }>();
-  public initialBaseline: { local?: any, server?: any } = {};
+  private activeInteractions = new Map<
+    string,
+    { meta: InteractionMeta; serverPreState?: any }
+  >();
+  public initialBaseline: { local?: any; server?: any } = {};
 
   constructor(private io: Server) {}
 
   public async onAppReady(localBaseline: any) {
-    console.log("[Diagnostic] App Ready event received. Fetching server baseline...");
+    console.log("[Diagnostic] App Ready event received.");
     this.initialBaseline.local = localBaseline;
-    try {
-       this.initialBaseline.server = await dbChecker.getServerState();
-       console.log("[Diagnostic] Server baseline fetched.");
-       this.io.emit("log", "APP READY: Initial Baseline (Local & Server) has been captured.");
-    } catch (e) {
-       console.error("Failed to fetch server baseline", e);
-    }
+    this.io.emit("log", "APP READY: Monitoring started.");
   }
 
-  public async onInteractionStart(interactionId: string, meta: InteractionMeta, timestamp: number) {
-    console.log(`[Diagnostic] Interaction Started: ${interactionId} on <${meta.tagName}> "${meta.text.trim()}"`);
-
-    // Asynchronously fetch server pre-state
-    let serverPreState = null;
-    try {
-       serverPreState = await dbChecker.getServerState();
-    } catch (e) {
-       console.error("Failed to fetch server pre-state", e);
-    }
-
-    this.activeInteractions.set(interactionId, { meta, serverPreState });
-
-    this.io.emit("interaction_start", {
-       interactionId,
-       meta,
-       timestamp
-    });
+  public async onInteractionStart(
+    interactionId: string,
+    meta: InteractionMeta,
+    timestamp: number,
+  ) {
+    console.log(`[Diagnostic] Interaction Started: ${interactionId}`);
+    this.activeInteractions.set(interactionId, { meta });
+    this.io.emit("interaction_start", { interactionId, meta, timestamp });
   }
 
-  public async onInteractionComplete(interactionId: string, evidence: EvidenceBuffer) {
+  public async onInteractionComplete(
+    interactionId: string,
+    evidence: EvidenceBuffer,
+  ) {
     const interactionInfo = this.activeInteractions.get(interactionId);
     if (!interactionInfo) return;
 
-    console.log(`[Diagnostic] Evaluating Evidence for ${interactionId}...`);
-
-    let serverPostState = null;
-    try {
-       serverPostState = await dbChecker.getServerState();
-    } catch (e) {
-       console.error("Failed to fetch server post-state", e);
-    }
-
-    const { meta, serverPreState } = interactionInfo;
+    const { meta } = interactionInfo;
     this.activeInteractions.delete(interactionId);
 
-    // --- SCORING SYSTEM ---
+    // --- PAYLOAD-BASED SMART COMPARATOR ---
+    let diagnosis = "";
+    let isError = false;
+    let confidence = "0%";
     let score = 0;
+    const payloadAnalyses: string[] = [];
+
+    const ledgerCount = evidence.ledgerEvents.length;
+
     if (evidence.domMutations > 0) score++;
     if (evidence.networkRequests > 0) score++;
     if (evidence.storageMutations > 0) score++;
-    if (evidence.ledgerEvents > 0) score++;
     if (evidence.urlChanges > 0) score++;
-    if (evidence.toasts > 0) score++; // Toast provides evidence of activity (e.g. error boundary/notification)
-
-    // --- DIAGNOSIS LOGIC ---
-    let diagnosis = "";
-    let confidence = "0%";
-    let isError = false;
+    if (evidence.toasts > 0) score++;
+    if (ledgerCount > 0) score++;
 
     if (score === 0) {
       diagnosis = "Dead Button - No system activity detected.";
       confidence = "99%";
       isError = true;
-    } else if (evidence.toasts > 0 && evidence.networkRequests === 0 && evidence.ledgerEvents === 0) {
+    } else if (
+      evidence.toasts > 0 &&
+      evidence.networkRequests === 0 &&
+      ledgerCount === 0
+    ) {
       diagnosis = "Exception before execution (Only Toast/UI error shown).";
       confidence = "80%";
       isError = true;
-    } else if (evidence.domMutations > 0 && score === 1) {
-      diagnosis = "UI Interaction (e.g., Modal Open/Close). No data mutation.";
+    } else if (ledgerCount === 0 && evidence.domMutations > 0) {
+      diagnosis = "UI Interaction only (No Events Generated).";
       confidence = "95%";
-    } else if (evidence.ledgerEvents > 0 || evidence.networkRequests > 0 || evidence.storageMutations > 0) {
-      diagnosis = "Action executed successfully.";
-      confidence = "90%";
-    } else {
-      diagnosis = `Activity detected but inconclusive (Score: ${score}/6).`;
-      confidence = "50%";
+    } else if (ledgerCount > 0) {
+      diagnosis = "Automated Payload Audit: SUCCESS";
+      confidence = "99%";
+
+      // Analisa setiap payload berdasarkan Kamus Statis
+      evidence.ledgerEvents.forEach((ev, idx) => {
+        if (EVENT_DICTIONARY.TYPE_A_CREATE.includes(ev.type)) {
+          payloadAnalyses.push(
+            `[TYPE A: CREATE] '${ev.type}' memuat ${Object.keys(ev.payload).length} key data baru.`,
+          );
+        } else if (EVENT_DICTIONARY.TYPE_B_UPDATE.includes(ev.type)) {
+          payloadAnalyses.push(
+            `[TYPE B: UPDATE] '${ev.type}' memodifikasi entitas terkait.`,
+          );
+        } else {
+          payloadAnalyses.push(
+            `[UNKNOWN TYPE] '${ev.type}' tidak terdaftar di Kamus Event.`,
+          );
+        }
+      });
     }
 
     const report = {
@@ -114,78 +160,18 @@ export class DiagnosticEngine {
         dom: evidence.domMutations,
         network: evidence.networkRequests,
         storage: evidence.storageMutations,
-        ledger: evidence.ledgerEvents,
+        ledger: ledgerCount,
         toast: evidence.toasts,
-        url: evidence.urlChanges
+        url: evidence.urlChanges,
       },
       score,
       diagnosis,
       confidence,
-      isError
+      isError,
+      payloadAnalyses, // Kirim ke UI untuk ditampilkan
     };
 
-    console.log(`[Diagnostic] Verdict: ${diagnosis} (Score: ${score}/6)`);
-
-    // --- STATE COMPARATOR (Mode 2) ---
-    let diffReport = null;
-    if (evidence.preState && evidence.postState) {
-        diffReport = this.compareStates(
-          { local: evidence.preState, server: serverPreState },
-          { local: evidence.postState, server: serverPostState }
-        );
-    }
-
-    // Emit result to UI
-    this.io.emit("diagnosis_report", { report, diffReport });
-  }
-
-  private compareStates(pre: { local: any, server: any }, post: { local: any, server: any }) {
-    const changes: string[] = [];
-
-    const compareObjects = (preObj: any, postObj: any, prefix: string) => {
-      if (!preObj && !postObj) return;
-      if (!preObj && postObj) {
-         changes.push(`[NEW] Data added in ${prefix}`);
-         return;
-      }
-      if (preObj && !postObj) {
-         changes.push(`[REMOVED] Data removed from ${prefix}`);
-         return;
-      }
-
-      if (Array.isArray(preObj) && Array.isArray(postObj)) {
-         if (postObj.length > preObj.length) {
-            changes.push(`[INSERT] ${postObj.length - preObj.length} row(s) added to ${prefix}.`);
-         } else if (postObj.length < preObj.length) {
-            changes.push(`[DELETE] ${preObj.length - postObj.length} row(s) removed from ${prefix}.`);
-         }
-      } else if (typeof preObj === 'object' && typeof postObj === 'object') {
-         const keys = new Set([...Object.keys(preObj), ...Object.keys(postObj)]);
-         for (const key of keys) {
-            if (JSON.stringify(preObj[key]) !== JSON.stringify(postObj[key])) {
-               const preVal = typeof preObj[key] === 'object' ? '...' : preObj[key];
-               const postVal = typeof postObj[key] === 'object' ? '...' : postObj[key];
-               changes.push(`[UPDATE] ${prefix}.${key} changed from '${preVal}' to '${postVal}'.`);
-            }
-         }
-      }
-    };
-
-    // Compare Local State
-    compareObjects(pre.local, post.local, "Local State");
-
-    // Compare Server State
-    if (pre.server && post.server) {
-      if (pre.server.shifts || post.server.shifts) compareObjects(pre.server.shifts, post.server.shifts, "Server.Shifts");
-      if (pre.server.categories || post.server.categories) compareObjects(pre.server.categories, post.server.categories, "Server.Categories");
-      if (pre.server.products || post.server.products) compareObjects(pre.server.products, post.server.products, "Server.Products");
-      if (pre.server.journal || post.server.journal) compareObjects(pre.server.journal, post.server.journal, "Server.Journal");
-    }
-
-    return {
-       hasChanges: changes.length > 0,
-       changes,
-       raw: { pre, post }
-    };
+    console.log(`[Diagnostic] Verdict: ${diagnosis}`);
+    this.io.emit("diagnosis_report", { report, diffReport: null }); // Diff report null karena tabel ditangani di UI
   }
 }
