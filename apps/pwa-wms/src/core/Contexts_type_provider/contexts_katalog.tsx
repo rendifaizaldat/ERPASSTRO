@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchKatalog, getCachedKatalog, saveKatalogCache } from "../service";
-import type { WmsDatabase } from "../database/rx-db";
+import { wmsProjector } from "../instances";
 
 export interface GlobalCategory {
   id: string; // Ini akan berisi kode unik seperti 201SA
@@ -68,19 +67,7 @@ export interface Vendor {
   isActive: boolean;
 }
 
-export interface CoaData {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  normalBalance: string;
-  isHeader: boolean;
-  parent: string | null;
-  desc: string | null;
-  status: string;
-}
-
-export function useKatalog(db: WmsDatabase | null, isInitialized: boolean) {
+export function useKatalog(isInitialized: boolean) {
   const [categories, setCategories] = useState<GlobalCategory[]>([]);
   const [masterProducts, setMasterProducts] = useState<GlobalProduct[]>([]);
   const [outletProducts, setOutletProducts] = useState<RegionalItem[]>([]);
@@ -90,88 +77,30 @@ export function useKatalog(db: WmsDatabase | null, isInitialized: boolean) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
 
   useEffect(() => {
-    if (!db) return;
-    const subs: any[] = [];
+    if (!isInitialized) return;
 
-    if (db.wms_vendors) {
-      subs.push(
-        db.wms_vendors.find().$.subscribe((docs) => {
-          setVendors(docs.map((d) => d.toJSON() as Vendor));
-        }),
-      );
-    }
-    if (db.wms_global_products) {
-      subs.push(
-        db.wms_global_products.find().$.subscribe((docs) => {
-          setMasterProducts(docs.map((d) => d.toJSON() as GlobalProduct));
-        }),
-      );
-    }
-    if (db.wms_regional_items) {
-      subs.push(
-        db.wms_regional_items.find().$.subscribe((docs) => {
-          setOutletProducts(docs.map((d) => d.toJSON() as RegionalItem));
-        }),
-      );
-    }
-    if (db.wms_categories) {
-      subs.push(
-        db.wms_categories.find().$.subscribe((docs) => {
-          setCategories(docs.map((d) => d.toJSON() as GlobalCategory));
-        }),
-      );
-    }
+    // Set initial state from projector
+    const state = wmsProjector.getState();
+    setCategories(state.categories as GlobalCategory[]);
+    setRegions(state.regions as Region[]);
+    setBranches(state.branches as Branch[]);
+    setVendors(state.vendors as Vendor[]);
+    setMasterProducts(state.products as GlobalProduct[]);
 
-    return () => subs.forEach((sub) => sub.unsubscribe());
-  }, [db]);
+    // UOM Options can be statically defined or fetched, but for now we set some default or leave empty.
+    setUomOptions(["PCS", "KG", "GRAM", "LITER", "BOTOL"]);
 
-  useEffect(() => {
-    if (!isInitialized || !db) return;
+    // Subscribe to projector changes
+    const subscription = wmsProjector.state$.subscribe((newState) => {
+        setCategories(newState.categories as GlobalCategory[]);
+        setRegions(newState.regions as Region[]);
+        setBranches(newState.branches as Branch[]);
+        setVendors(newState.vendors as Vendor[]);
+        setMasterProducts(newState.products as GlobalProduct[]);
+    });
 
-    const loadKatalog = async () => {
-      try {
-        const data = await fetchKatalog();
-
-        saveKatalogCache(data);
-
-        if (data.vendors && data.vendors.length) {
-          try {
-            await db.wms_vendors.bulkUpsert(data.vendors);
-          } catch (err) {}
-        }
-
-        if (data.globalProducts && data.globalProducts.length) {
-          try {
-            await db.wms_global_products.bulkUpsert(data.globalProducts);
-          } catch (err) {}
-        }
-
-        if (data.regionalItems && data.regionalItems.length) {
-          try {
-            await db.wms_regional_items.bulkUpsert(data.regionalItems);
-          } catch (err) {}
-        }
-
-        if (data.categories && data.categories.length) {
-          try {
-            await db.wms_categories.bulkUpsert(data.categories);
-          } catch (err) {}
-        }
-
-        setRegions(data.regions || []);
-        setBranches(data.branches || []);
-        setUomOptions(data.metadata?.uomOptions || []);
-      } catch (error) {
-        const cached = getCachedKatalog();
-        if (cached) {
-          setRegions(cached.regions || []);
-          setBranches(cached.branches || []);
-          setUomOptions(cached.metadata?.uomOptions || []);
-        }
-      }
-    };
-    loadKatalog();
-  }, [isInitialized, db]);
+    return () => subscription.unsubscribe();
+  }, [isInitialized]);
 
   return {
     categories,

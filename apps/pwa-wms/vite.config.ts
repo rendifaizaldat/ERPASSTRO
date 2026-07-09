@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import path from "path";
 
 export default defineConfig({
   plugins: [
@@ -45,13 +46,17 @@ export default defineConfig({
         ],
       },
       workbox: {
-      maximumFileSizeToCacheInBytes: 5000000,
+        maximumFileSizeToCacheInBytes: 5000000,
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
       },
     }),
   ],
   resolve: {
-    tsconfigPaths: true,
+    alias: {
+      "@asstro/ledger": path.resolve(__dirname, "../../packages/ledger/src/index.ts"),
+      "@asstro/projection": path.resolve(__dirname, "../../packages/projection/src/index.ts"),
+      "@asstro/protocol": path.resolve(__dirname, "../../packages/protocol/src/index.ts"),
+    },
   },
   server: {
     port: 3001,

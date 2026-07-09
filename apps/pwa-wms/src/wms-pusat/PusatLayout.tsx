@@ -4,6 +4,9 @@ import { Footer } from "../shared/components/Footer";
 import { PusatSidebar } from "./components/PusatSidebar";
 
 // Master Data
+
+import { PusatCompanyMaster, PusatRegionMaster, PusatBranchMaster } from "./master/organization";
+
 import { SharedMasterProduct } from "../shared/layouts/PusatMasterProduct";
 import { PusatProductMergeCenter } from "./master/PusatProductMergeCenter";
 import { PusatVendorManagement } from "./master/PusatVendorManagement";
@@ -38,6 +41,13 @@ export const PusatLayout = () => {
         return <PusatAccountPayable />;
       case "master_product":
         return <SharedMasterProduct />;
+
+      case "master_company":
+        return <PusatCompanyMaster />;
+      case "master_region":
+        return <PusatRegionMaster />;
+      case "master_branch":
+        return <PusatBranchMaster />;
       case "master_category":
         return <PusatCategoryMaster />;
       case "master_vendor":

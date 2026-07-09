@@ -56,7 +56,7 @@ router.get("/device-profile/:id", async (req: Request, res: Response) => {
   const result = await db
     .select()
     .from(devices)
-    .where(eq(devices.id, req.params.id))
+    .where(eq(devices.id, req.params.id as string))
     .limit(1);
   res.json(result[0] || null);
 });
@@ -65,7 +65,7 @@ router.get("/category-by-name/:name", async (req: Request, res: Response) => {
   const result = await db
     .select()
     .from(productCategories)
-    .where(eq(productCategories.name, req.params.name))
+    .where(eq(productCategories.name, req.params.name as string))
     .limit(1);
   res.json(result[0] || null);
 });
@@ -74,7 +74,7 @@ router.get("/product-by-sku/:sku", async (req: Request, res: Response) => {
   const result = await db
     .select()
     .from(products)
-    .where(eq(products.sku, req.params.sku))
+    .where(eq(products.sku, req.params.sku as string))
     .limit(1);
   res.json(result[0] || null);
 });
@@ -84,7 +84,7 @@ router.get("/events-by-type/:type", async (req: Request, res: Response) => {
   const result = await db
     .select()
     .from(eventJournal)
-    .where(eq(eventJournal.eventType, req.params.type))
+    .where(eq(eventJournal.eventType, req.params.type as string))
     .orderBy(desc(eventJournal.recordedAt))
     .limit(limit);
   res.json(result);

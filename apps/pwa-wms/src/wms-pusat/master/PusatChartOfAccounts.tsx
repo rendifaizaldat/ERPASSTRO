@@ -94,9 +94,10 @@ const InfoTip: React.FC<{ description: string }> = ({ description }) => {
 };
 
 export const ChartOfAccounts: React.FC = () => {
-  const { coas = [], fetchCoaData } = useWms();
+  const { coas = [], fetchCoaData, categories = [] } = useWms();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("ACTIVE");
 
   const [isEditing, setIsEditing] = useState(false);
   const [accType, setAccType] = useState("ASSET");
@@ -272,6 +273,14 @@ export const ChartOfAccounts: React.FC = () => {
       `🗑️ [handleDelete] Mencoba menghapus akun dengan kode: ${code}`,
     );
 
+    const isCategoryAttached = categories.some(
+      (c: any) => c.coaId === code && c.status !== "ARCHIVED"
+    );
+    if (isCategoryAttached) {
+      showToast("Gagal! Akun ini terhubung dengan kategori produk aktif.", "ERROR");
+      return;
+    }
+
     const isParent = coas.some(
       (a: any) => a.parent === code && a.status !== "ARCHIVED",
     );
@@ -308,9 +317,24 @@ export const ChartOfAccounts: React.FC = () => {
     }
   };
 
+
+  const handleRestore = async (code: string) => {
+    const accToRestore = coas.find((a: any) => a.code === code);
+    if (!accToRestore) return;
+    if (confirm(`Yakin ingin mengembalikan (restore) kode akun ${code}?`)) {
+      try {
+        const payload = { ...accToRestore, status: "ACTIVE" };
+        await publishEvent("COA_UPDATED", code, payload);
+        showToast(`Akun ${code} berhasil dikembalikan`, "SUCCESS");
+      } catch (error) {
+        showToast("Gagal mengembalikan COA.", "ERROR");
+      }
+    }
+  };
+
   const activeCoas = useMemo(() => {
-    return coas.filter((a: any) => a.status !== "ARCHIVED");
-  }, [coas]);
+    return coas.filter((a: any) => a.status === activeTab || (activeTab === "ACTIVE" && !a.status));
+  }, [coas, activeTab]);
 
   const filteredAccounts = useMemo(() => {
     return activeCoas
@@ -512,7 +536,22 @@ export const ChartOfAccounts: React.FC = () => {
         </div>
 
         <div className="flex-1 flex flex-col min-h-0 bg-white xl:bg-slate-50">
-          <div className="p-4 xl:p-6 border-b border-slate-200 bg-white space-y-4 sticky top-0 z-10">
+
+          <div className="flex items-center gap-4 border-b border-slate-200 bg-white px-4 xl:px-6 pt-4 sticky top-0 z-10">
+            <button
+              onClick={() => setActiveTab("ACTIVE")}
+              className={`pb-3 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === "ACTIVE" ? "border-b-2 border-sky-600 text-sky-600" : "text-slate-400 hover:text-slate-600"}`}
+            >
+              Akun Aktif
+            </button>
+            <button
+              onClick={() => setActiveTab("ARCHIVED")}
+              className={`pb-3 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === "ARCHIVED" ? "border-b-2 border-rose-600 text-rose-600" : "text-slate-400 hover:text-slate-600"}`}
+            >
+              Diarsipkan
+            </button>
+          </div>
+          <div className="p-4 xl:p-6 border-b border-slate-200 bg-white space-y-4 sticky top-[45px] z-10">
             <div className="flex items-center gap-2">
               <ListTree className="text-sky-600" size={20} />
               <span className="font-black text-sm text-slate-800 uppercase tracking-tight">
@@ -590,20 +629,34 @@ export const ChartOfAccounts: React.FC = () => {
                           )}
                         </div>
                       </div>
+
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEditClick(acc)}
-                          className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(acc.code)}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {activeTab === "ACTIVE" ? (
+                          <>
+                            <button
+                              onClick={() => handleEditClick(acc)}
+                              className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(acc.code)}
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleRestore(acc.code)}
+                            className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all cursor-pointer"
+                            title="Kembalikan (Restore)"
+                          >
+                            <Save size={14} />
+                          </button>
+                        )}
                       </div>
+
                     </div>
                   );
                 })

@@ -30,6 +30,9 @@ addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBMigrationPlugin);
 
+// Note: In the refactored architecture, these explicit schemas are largely
+// superseded by the LedgerEngine's event store. We keep them here temporarily
+// to avoid breaking other parts of the app that haven't been migrated yet (e.g. Auth, Piutang).
 export type WmsDatabaseCollections = {
   wms_outbox: any;
   wms_piutang: any;

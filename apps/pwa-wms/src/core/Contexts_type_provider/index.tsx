@@ -10,6 +10,7 @@ import { useEWallet } from "./contexts_ewallet";
 import { useCoa, CoaData } from "./contexts_coa";
 import type { WmsDatabase } from "../database/rx-db";
 import { fetchKatalog, saveKatalogCache } from "../service";
+import { initializeWmsProjector } from "../instances";
 
 export interface WmsContextProps {
   db: WmsDatabase | null;
@@ -72,7 +73,7 @@ export interface WmsContextProps {
 
   // COA & Fetcher
   coas: CoaData[];
-  fetchCoaData: ReturnType<typeof useCoa>["fetchCoaData"]; // <-- TAMBAHKAN INI
+  fetchCoaData: ReturnType<typeof useCoa>["fetchCoaData"];
 }
 
 export const WmsContext = createContext<WmsContextProps | undefined>(undefined);
@@ -81,17 +82,31 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [db, setDb] = useState<WmsDatabase | null>(null);
+
+  // Flag for ensuring we only initialize projector once
+  const [projectorInitialized, setProjectorInitialized] = useState(false);
+
   useEffect(() => {
+    // We still initialize RxDB for other uses (Auth, Sync logic) for now,
+    // but the main data goes to Ledger + Projector.
     initWmsDb().then(setDb);
   }, []);
 
   const auth = useAuth();
-  const katalog = useKatalog(db, auth.isInitialized);
+
+  useEffect(() => {
+      if (auth.isInitialized && !projectorInitialized) {
+          initializeWmsProjector().then(() => setProjectorInitialized(true));
+      }
+  }, [auth.isInitialized, projectorInitialized]);
+
+  // Context hooks
+  const katalog = useKatalog(auth.isInitialized && projectorInitialized);
   const piutang = usePiutang(db, auth.wmsState);
   const receivingsContext = useReceivings(db, auth.wmsState);
   const outletBalance = useOutletBalance(db);
   const ewallet = useEWallet(db, auth.wmsState);
-  const coaContext = useCoa(auth.isInitialized);
+  const coaContext = useCoa(auth.isInitialized && projectorInitialized);
 
   const triggerDeltaSync = async () => {
     try {
@@ -101,20 +116,10 @@ export const WmsProvider: React.FC<{ children: React.ReactNode }> = ({
       if (outletBalance.fetchOutletBalances)
         await outletBalance.fetchOutletBalances();
       if (ewallet.fetchEWalletData) await ewallet.fetchEWalletData();
-      if (coaContext.fetchCoaData) await coaContext.fetchCoaData(); // <-- TAMBAHKAN PEMANGGILAN INI
 
-      if (db) {
-        const data = await fetchKatalog();
-        saveKatalogCache(data);
-        for (const vendor of data.vendors || [])
-          await db.wms_vendors.upsert(vendor);
-        for (const prod of data.globalProducts || [])
-          await db.wms_global_products.upsert(prod);
-        for (const item of data.regionalItems || [])
-          await db.wms_regional_items.upsert(item);
-        for (const cat of data.categories || [])
-          await db.wms_categories.upsert(cat);
-      }
+      // We will let sync handle fetching events and replaying into Ledger,
+      // which will naturally update Projector.
+      console.log("[WMS_PROVIDER] Triggering delta sync...");
     } catch (err) {
       console.error("[WMS_PROVIDER] Gagal menjalankan Delta Sync:", err);
     }

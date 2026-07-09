@@ -97,6 +97,29 @@ export const PusatSidebar: React.FC<MenuProps> = ({
 
   // Daftar menu
   const menus = [
+
+    {
+      id: "master_company",
+      label: "Master Perusahaan",
+      icon: Building2,
+      group: "Master Organisasi",
+      visible: isManagerOrAdmin,
+    },
+    {
+      id: "master_region",
+      label: "Master Region",
+      icon: Map,
+      group: "Master Organisasi",
+      visible: isManagerOrAdmin,
+    },
+    {
+      id: "master_branch",
+      label: "Master Outlet",
+      icon: Store,
+      group: "Master Organisasi",
+      visible: isManagerOrAdmin,
+    },
+
     {
       id: "po",
       label: "Purchase Order",
