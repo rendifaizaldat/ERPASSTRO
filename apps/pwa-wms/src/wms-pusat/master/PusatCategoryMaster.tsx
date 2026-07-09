@@ -15,9 +15,10 @@ import {
 } from "lucide-react";
 
 export const PusatCategoryMaster: React.FC = () => {
-  const { categories = [], coas = [] } = useWms();
+  const { categories = [], coas = [], masterProducts = [] } = useWms();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("ACTIVE");
 
   // Filter COA yang relevan untuk dijadikan Parent Kategori (Aset Persediaan atau Beban)
   const eligibleCoas = useMemo(() => {
@@ -130,20 +131,41 @@ export const PusatCategoryMaster: React.FC = () => {
   };
 
   const handleDelete = async (cat: any) => {
-    if (confirm(`Yakin ingin menghapus (arsip) kategori ${cat.name}?`)) {
+    const hasProducts = masterProducts.some((p: any) => p.categoryId === cat.id && p.status !== "ARCHIVED");
+    if (hasProducts) {
+      showToast("Gagal! Kategori ini memiliki produk aktif.", "ERROR");
+      return;
+    }
+
+    if (confirm(`Yakin ingin mengarsipkan kategori ${cat.name}?`)) {
       try {
-        await publishEvent("CATEGORY_DELETED", cat.id, { id: cat.id });
-        showToast(`Kategori ${cat.name} diarsipkan`, "WARNING");
+        await publishEvent("GLOBAL_CATEGORY_DELETED", cat.id, { id: cat.id });
+        showToast("Kategori berhasil diarsipkan", "WARNING");
       } catch (error) {
-        showToast("Gagal menghapus Kategori.", "ERROR");
+        showToast("Gagal menghapus kategori.", "ERROR");
       }
     }
   };
 
   // Filter Data Kategori
+
+  const handleRestore = async (id: string) => {
+    const catToRestore = categories.find((c: any) => c.id === id);
+    if (!catToRestore) return;
+    if (confirm(`Yakin ingin mengembalikan (restore) kategori ${catToRestore.name}?`)) {
+      try {
+        const payload = { ...catToRestore, status: "ACTIVE" };
+        await publishEvent("GLOBAL_CATEGORY_UPDATED", id, payload);
+        showToast(`Kategori berhasil dikembalikan`, "SUCCESS");
+      } catch (error) {
+        showToast("Gagal mengembalikan Kategori.", "ERROR");
+      }
+    }
+  };
+
   const activeCategories = useMemo(() => {
-    return categories.filter((c) => c.status !== "ARCHIVED");
-  }, [categories]);
+    return categories.filter((c: any) => c.status === activeTab || (activeTab === "ACTIVE" && !c.status));
+  }, [categories, activeTab]);
 
   const filteredCategories = useMemo(() => {
     return activeCategories
@@ -344,20 +366,34 @@ export const PusatCategoryMaster: React.FC = () => {
                           <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded uppercase tracking-widest border border-emerald-100">
                             ID: {cat.id}
                           </span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {activeTab === "ACTIVE" ? (
+                          <>
                             <button
                               onClick={() => handleEditClick(cat)}
-                              className="text-slate-400 hover:text-amber-500 p-1"
+                              className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
                             >
                               <Pencil size={14} />
                             </button>
                             <button
                               onClick={() => handleDelete(cat)}
-                              className="text-slate-400 hover:text-red-500 p-1"
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
                             >
                               <Trash2 size={14} />
                             </button>
-                          </div>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleRestore(cat.id)}
+                            className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all cursor-pointer"
+                            title="Kembalikan (Restore)"
+                          >
+                            <Save size={14} />
+                          </button>
+                        )}
+                      </div>
+
                         </div>
                         <h4 className="font-black text-sm text-slate-800 uppercase tracking-tight mb-3">
                           {cat.name}

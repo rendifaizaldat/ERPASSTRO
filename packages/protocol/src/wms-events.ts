@@ -38,6 +38,42 @@ export const MasterProductAddedPayloadSchema = z.object({
   margin: z.number().optional(),
   sellingPrice: z.number().optional(),
 });
+
+// --- MASTER ORGANIZATION SCHEMAS ---
+export const CompanyCreatedPayloadSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  logoUrl: z.string().optional().nullable(),
+  certificateUrl: z.string().optional().nullable(),
+  isActive: z.boolean().optional().default(true),
+});
+export const CompanyUpdatedPayloadSchema = CompanyCreatedPayloadSchema;
+export const CompanyDeletedPayloadSchema = z.object({ id: z.string() });
+
+export const RegionCreatedPayloadSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  isActive: z.boolean().optional().default(true),
+});
+export const RegionUpdatedPayloadSchema = RegionCreatedPayloadSchema;
+export const RegionDeletedPayloadSchema = z.object({ id: z.string() });
+
+export const BranchCreatedPayloadSchema = z.object({
+  id: z.string(),
+  companyId: z.string(),
+  regionId: z.string(),
+  name: z.string(),
+  code: z.string(),
+  address: z.string().optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  isActive: z.boolean().optional().default(true),
+});
+export const BranchUpdatedPayloadSchema = BranchCreatedPayloadSchema;
+export const BranchDeletedPayloadSchema = z.object({ id: z.string() });
+
 // --- CHART OF ACCOUNTS (COA) SCHEMAS ---
 export const CoaCreatedPayloadSchema = z.object({
   id: z.string(), // Kita gunakan kode COA sebagai ID (contoh: "1-1100")
@@ -317,6 +353,17 @@ export const FinancialConfigUpdatedPayloadSchema = z.object({
 
 // --- DISCRIMINATED UNION EVENTS ---
 export const WmsEventSchema = z.discriminatedUnion("type", [
+
+  z.object({ type: z.literal("COMPANY_CREATED"), payload: CompanyCreatedPayloadSchema }),
+  z.object({ type: z.literal("COMPANY_UPDATED"), payload: CompanyUpdatedPayloadSchema }),
+  z.object({ type: z.literal("COMPANY_DELETED"), payload: CompanyDeletedPayloadSchema }),
+  z.object({ type: z.literal("REGION_CREATED"), payload: RegionCreatedPayloadSchema }),
+  z.object({ type: z.literal("REGION_UPDATED"), payload: RegionUpdatedPayloadSchema }),
+  z.object({ type: z.literal("REGION_DELETED"), payload: RegionDeletedPayloadSchema }),
+  z.object({ type: z.literal("BRANCH_CREATED"), payload: BranchCreatedPayloadSchema }),
+  z.object({ type: z.literal("BRANCH_UPDATED"), payload: BranchUpdatedPayloadSchema }),
+  z.object({ type: z.literal("BRANCH_DELETED"), payload: BranchDeletedPayloadSchema }),
+
   z.object({
     type: z.literal("CATEGORY_CREATED"),
     payload: GlobalCategoryCreatedPayloadSchema,

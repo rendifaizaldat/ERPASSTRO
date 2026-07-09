@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { getWmsDb } from "../database/rx-db";
-import { API_BASE_URL } from "../constants";
+import { wmsProjector, eventBus } from "../instances";
 
 export interface CoaData {
   id: string;
@@ -17,65 +16,29 @@ export interface CoaData {
 export function useCoa(isInitialized: boolean) {
   const [coas, setCoas] = useState<CoaData[]>([]);
 
-  // 1. Fungsi penarik data dari API ke RxDB (dipanggil oleh WmsProvider saat Delta Sync)
-  const fetchCoaData = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/wms/coas/hydrate`);
-      if (!response.ok) throw new Error("Gagal mengambil data COA dari server");
-
-      const payload = await response.json();
-      if (payload && payload.coas) {
-        const db = await getWmsDb();
-
-        // Transformasi untuk Single Table Design (Menambahkan docType: "COA")
-        const rxdbPayloads = payload.coas.map((item: any) => ({
-          ...item,
-          docType: "COA",
-          status: item.status || "ACTIVE",
-          updatedAt: new Date().toISOString(),
-        }));
-
-        // Upsert ke RxDB, subscription di bawah akan otomatis mendeteksi perubahan
-        await db.wms_categories.bulkUpsert(rxdbPayloads);
-        console.log(
-          `✅ [useCoa] Berhasil menyinkronkan ${rxdbPayloads.length} data ke RxDB`,
-        );
-      }
-    } catch (error) {
-      console.error("[useCoa] Gagal fetchCoaData:", error);
-    }
-  };
-
-  // 2. Subscription RxDB (UI reaktif secara otomatis)
   useEffect(() => {
     if (!isInitialized) return;
 
-    let subscription: any;
+    // Initial state
+    setCoas(wmsProjector.getState().coas as CoaData[]);
 
-    const initSubscription = async () => {
-      try {
-        const db = await getWmsDb();
-        subscription = db.wms_categories
-          .find({
-            selector: {
-              docType: "COA",
-            },
-          })
-          .$.subscribe((results: any) => {
-            const data = results.map((doc: any) => doc.toJSON());
-            setCoas(data);
-          });
-      } catch (error) {
-        console.error("[CONTEXT_COA] Gagal inisialisasi subscription:", error);
-      }
-    };
-
-    initSubscription();
+    // Subscribe to projector state changes
+    const subscription = wmsProjector.state$.subscribe((state) => {
+       setCoas(state.coas as CoaData[]);
+    });
 
     return () => {
-      if (subscription) subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [isInitialized]);
+
+  // Dummy fetchCoaData to maintain compatibility if called explicitly,
+  // though sync should handle hydration naturally via event replay.
+  const fetchCoaData = async () => {
+      // In the new architecture, sync pulls events and replay fills projector state.
+      // This is a no-op or could manually trigger sync.
+      console.log("fetchCoaData called. In event-sourcing, state is built from events.");
+  };
 
   return {
     coas,

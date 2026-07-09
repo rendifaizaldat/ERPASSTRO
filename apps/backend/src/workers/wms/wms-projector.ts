@@ -5,7 +5,7 @@ import {
   wmsGlobalProducts,
   wmsRegionalItems,
 } from "../../db/schema";
-import { branches } from "../../db/schema/master/organization";
+import { branches, companies, regions } from "../../db/schema/master/organization";
 import { wmsProcessedEvents } from "../../db/schema/db_wms/wms.events";
 import {
   wmsReceiving,
@@ -45,6 +45,16 @@ const PROJECTOR_EVENT_TYPES = new Set([
   "RECEIVING_OUTLET_SUBMITTED",
   "RECEIVING_PUSAT_SUBMITTED",
   "AP_OUTLET_PAYMENT_SUBMITTED",
+
+  "COMPANY_CREATED",
+  "COMPANY_UPDATED",
+  "COMPANY_DELETED",
+  "REGION_CREATED",
+  "REGION_UPDATED",
+  "REGION_DELETED",
+  "BRANCH_CREATED",
+  "BRANCH_UPDATED",
+  "BRANCH_DELETED",
   "COA_CREATED",
   "COA_UPDATED",
   "COA_DELETED",
@@ -318,7 +328,118 @@ export async function startWmsProjector() {
               break;
 
             // --- COA EVENTS ---
-            case "COA_CREATED": {
+
+          // --- ORGANISASI (COMPANIES) ---
+          case "COMPANY_CREATED":
+          case "COMPANY_UPDATED": {
+            const data = payload as any;
+            await tx
+              .insert(companies)
+              .values({
+                id: data.id,
+                name: data.name,
+                code: data.code,
+                isActive: data.isActive,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: companies.id,
+                set: {
+                  name: data.name,
+                  code: data.code,
+                  isActive: data.isActive,
+                  updatedAt: new Date(),
+                },
+              });
+            break;
+          }
+          case "COMPANY_DELETED": {
+            const data = payload as any;
+            await tx
+              .update(companies)
+              .set({ isActive: false, updatedAt: new Date() })
+              .where(eq(companies.id, data.id));
+            break;
+          }
+
+          // --- ORGANISASI (REGIONS) ---
+          case "REGION_CREATED":
+          case "REGION_UPDATED": {
+            const data = payload as any;
+            await tx
+              .insert(regions)
+              .values({
+                id: data.id,
+                name: data.name,
+                code: data.code,
+                isActive: data.isActive,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: regions.id,
+                set: {
+                  name: data.name,
+                  code: data.code,
+                  isActive: data.isActive,
+                  updatedAt: new Date(),
+                },
+              });
+            break;
+          }
+          case "REGION_DELETED": {
+            const data = payload as any;
+            await tx
+              .update(regions)
+              .set({ isActive: false, updatedAt: new Date() })
+              .where(eq(regions.id, data.id));
+            break;
+          }
+
+          // --- ORGANISASI (BRANCHES) ---
+          case "BRANCH_CREATED":
+          case "BRANCH_UPDATED": {
+            const data = payload as any;
+            await tx
+              .insert(branches)
+              .values({
+                id: data.id,
+                companyId: data.companyId,
+                regionId: data.regionId,
+                name: data.name,
+                code: data.code,
+                address: data.address,
+                latitude: data.latitude,
+                longitude: data.longitude,
+                isActive: data.isActive,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: branches.id,
+                set: {
+                  name: data.name,
+                  code: data.code,
+                  address: data.address,
+                  latitude: data.latitude,
+                  longitude: data.longitude,
+                  isActive: data.isActive,
+                  updatedAt: new Date(),
+                },
+              });
+            break;
+          }
+          case "BRANCH_DELETED": {
+            const data = payload as any;
+            await tx
+              .update(branches)
+              .set({ isActive: false, updatedAt: new Date() })
+              .where(eq(branches.id, data.id));
+            break;
+          }
+
+          case "COA_CREATED": {
               await tx
                 .insert(coa)
                 .values({
